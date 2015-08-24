@@ -1,0 +1,23 @@
+merge files (all nt files of a directory)
+sudo cat -u `find ./* -maxdepth 0 -type f -name '*.nt' -print` > BNBLODB_201507.nt
+
+sort with 8 cores
+sudo sort --parallel=8 -uo BNBLODB_201507_sorted.nt BNBLODB_201507.nt
+
+extract isbns with subject (unclean with appendix)
+cat bnb_marc.mrc_triples_isbn_unclean.nt | grep -P '(?<=http://purl.org/ontology/bibo/isbn).*' | cat | perl -ne 's/(^[^<]*)(<[^>]+>)([^"]*")(.*)/$2 - $4/g; print;'  | perl -ne 's/(?<= - )([\D]*)([\d]+)(.*)/$2/g; print;' | perl -ne 's/(?<= - )(\d{12}).*/$1/g; print;' | perl -ne 's|(?<= - )(\d{9})(\d)(?=\D)|$1|g; print;' |  perl -ne 's/(?<= - )(\D*)(?=(\d{9})\D)/978/g; print;' > bnb_isbns.txt
+
+extract isbns only
+cat bnb_isbns.txt | perl -ne 's/(^.* - )(.*)/$2/g; print;' | sort > bnb_isbns_only.txt
+
+(gzipped)
+gunzip -c cambridge.nt.gz | cat | grep ... |... so. >...
+
+intersect | uniq (both files have to be sorted)
+grep -Fx -f bnb_isbns_only.txt other_isbns_only.txt | uniq > isbn_intersection.txt
+
+for both sorted subject - isbn files delete any isbn not in intersection 
+grep -F -f isbn_intersection.txt bnb_isbns.txt | sort> bnb_isbn_sorted_filtered.txt
+
+extract uris only
+cat bnb_isbns.txt | perl -ne 's/(^.*)( - .*)/$1/g; print;' | sort | uniq> bnb_isbns_only.txt
