@@ -54,4 +54,5 @@ out
 #project specific
 *.gz
 *.nt
+*.filepart
 

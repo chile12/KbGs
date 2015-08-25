@@ -4,9 +4,7 @@ import scala.collection.Iterator;
 import scala.collection.Iterable;
 import scala.collection.immutable.List;
 
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Map;
 
 /**
  * Created by Chile on 8/24/2015.
