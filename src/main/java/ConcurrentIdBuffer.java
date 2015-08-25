@@ -27,38 +27,34 @@ public class ConcurrentIdBuffer {
         }
     }
 
-    private void addFromResource(Iterator<String> sr)
+    private synchronized void addFromResource(Iterator<String> sr)
     {
-        synchronized (this) {
             String inp = sr.next();
             String uri = inp.substring(0, inp.indexOf(" - "));
             String id = inp.substring(inp.indexOf(" - ") + 3);
             map.put(uri, id);
-        }
     }
 
-    public void remove(String uri)
+    public synchronized void remove(String uri)
     {
-        synchronized (this) {
             Iterable<String> rem = map.remove(uri).get();
             for (int i = getKeys().size(); i < this.buffer; i++) {
                 if(stremResource.hasNext())
                     addFromResource(stremResource);
             }
-        }
     }
 
-    public List<String> getValues(String key)
+    public synchronized List<String> getValues(String key)
     {
         return map.valueIterator(key).toList();
     }
 
-    public List<String> getKeys()
+    public synchronized List<String> getKeys()
     {
         return map.keys().toList();
     }
 
-    public boolean contains(String key)
+    public synchronized boolean contains(String key)
     {
         List<String> itr = map.keys().toList();
         if(itr.contains(key))
@@ -67,7 +63,7 @@ public class ConcurrentIdBuffer {
             return false;
     }
 
-    public int size()
+    public synchronized int size()
     {
         return map.mapSize();
     }

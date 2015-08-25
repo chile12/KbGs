@@ -41,6 +41,7 @@ class KbReader(outputWriter: ActorRef, kbPrefix: String) extends Actor{
         return
       }
     }
+    finished = true;
   }
 
   private def readNextSubject: StringBuilder =

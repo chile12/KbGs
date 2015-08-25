@@ -19,7 +19,7 @@ class ConfigImpl(path: String) {
 
   val kbMap = config.get("kbMap").get.asInstanceOf[Map[String, Map[String, String]]]
   val outFile = config.get("outFile").get.toString
-
+  val tempFile = outFile.substring(0, outFile.lastIndexOf('.')) + ".tmp" + outFile.substring(outFile.lastIndexOf('.'))
 }
 
 object ConfigImpl{

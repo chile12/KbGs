@@ -1,4 +1,4 @@
-import java.io.{FileInputStream, BufferedInputStream}
+import java.io.{InputStream, FileInputStream, BufferedInputStream}
 import java.util.logging.{Level, Logger}
 import java.util.zip.GZIPInputStream
 
@@ -25,9 +25,17 @@ object Main {
   def getSource(path: String) : Iterator[String] =
   {
     if(path.trim().endsWith(".gz"))
-      new BufferedSource(new GZIPInputStream(new BufferedInputStream(new FileInputStream(path)))).getLines()
+      new BufferedSource(getInputStream(path)).getLines()
     else
-      new BufferedSource(new BufferedInputStream(new FileInputStream(path))).getLines()
+      new BufferedSource(getInputStream(path)).getLines()
+  }
+
+  def getInputStream(path: String) : InputStream =
+  {
+    if(path.trim().endsWith(".gz"))
+      new GZIPInputStream(new BufferedInputStream(new FileInputStream(path)))
+    else
+      new BufferedInputStream(new FileInputStream(path))
   }
 
   case class EvalRequest(input: StringBuilder, idBuffer: ConcurrentIdBuffer)
