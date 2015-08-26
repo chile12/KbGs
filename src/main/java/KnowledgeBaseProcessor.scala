@@ -1,12 +1,11 @@
 import Main._
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{Actor, ActorRef}
 
 /**
  * Created by Chile on 8/23/2015.
  */
-class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Actor with InstanceProcessor{
+class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Actor with InstanceProcessor[String]{
   private val idBuffer = new ConcurrentIdBuffer(Main.getSource(Main.config.kbMap.get(kbPrefix).get("idFile")).getLines(), 20)
-  private val workers = context.actorOf(Props(classOf[InstanceEvaluator], tempWriter, kbPrefix).withRouter(new akka.routing.SmallestMailboxRouter(4)))
   private val idProperty = Main.config.kbMap.get(kbPrefix).get("idProperty")
   private val graphName = Main.config.kbMap.get(kbPrefix).get("kbGraph")
   private val newUriStump = "<http://aksw.org/kbgs/isbn/%s>"
@@ -16,7 +15,7 @@ class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Act
   override def startProcess(): Unit =
   {
     tempWriter ! WriterStart(getTempWriterName, self.path.name)
-    val instanceReader = new InstanceReader(Main.config.kbMap.get(kbPrefix).get("kbInput"))
+    val instanceReader = new InstanceReader[String](Main.config.kbMap.get(kbPrefix).get("kbInput"))
       while(instanceReader.notFinished() && idBuffer.size > 0)
         instanceReader.readSubject(evaluate, action)
     tempWriter ! Finalize()
@@ -24,8 +23,7 @@ class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Act
     finished = true
   }
 
-  override def evaluate(input: Any): String = {
-    if(input.getClass() == classOf[StringBuilder]) {
+  override def evaluate(input: StringBuilder): String = {
       val isb: StringBuilder = input.asInstanceOf[StringBuilder]
       val sb = new StringBuilder()
       val isbnIdx = isb.lines.indexWhere(x => x.contains(idProperty))
@@ -47,13 +45,11 @@ class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Act
               idBuffer.addSameAs(String.format(newUriStump, thisIds(i)), String.format(newUriStump, thisIds(0)))
             }
           }
+          val test = sb.toString()
           tempWriter ! InsertJoinedSubject(sb)
           return uri
         }
       }
-    }
-    else
-      Main.logger.warning("Actor " + self.path.name + ": evaluate function was not called with a StringBuilder")
     null
   }
 

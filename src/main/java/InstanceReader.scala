@@ -3,7 +3,7 @@
  * 
  * used for reading the whole instance of a resource from a sorted ntriple file
  */
-class InstanceReader(sourcePath: String) {
+class InstanceReader[T](sourcePath: String) {
 
   private val source = Main.getSource(sourcePath).getLines()
   private var lastRead: String = null
@@ -14,7 +14,7 @@ class InstanceReader(sourcePath: String) {
    * creates and sends the full instance (with all (mapped) properties, defined by the uri to the outputWriter
    * @return uri of the completed instance
    */
-  def readSubject(evalFunction: (StringBuilder) => String, resultFunction:(String) => Unit): Unit=
+  def readSubject(evalFunction: (StringBuilder) => T, resultFunction:(T) => Unit): Unit=
   {
     while(source.hasNext)
     {

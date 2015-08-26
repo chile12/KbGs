@@ -5,7 +5,7 @@ import akka.actor.{Actor, ActorRef}
 /**
  * Created by Chile on 8/25/2015.
  */
-class SameAsProcessor(outputWriter: ActorRef) extends Actor with InstanceProcessor {
+class SameAsProcessor(outputWriter: ActorRef) extends Actor with InstanceProcessor[Unit] {
 
   var filenames: Array[String] = null
   var idBuffer:ConcurrentIdBuffer = null
@@ -15,7 +15,7 @@ class SameAsProcessor(outputWriter: ActorRef) extends Actor with InstanceProcess
     outputWriter ! WriterStart(Main.config.outFile, outputWriter.path.name)
     idBuffer.normalizeSameAsLinks()
     for(filename <- filenames) {
-      val instanceReader = new InstanceReader(filename)
+      val instanceReader = new InstanceReader[Unit](filename)
       while (instanceReader.notFinished())
         instanceReader.readSubject(evaluate, action)
     }
@@ -23,29 +23,21 @@ class SameAsProcessor(outputWriter: ActorRef) extends Actor with InstanceProcess
     context.parent ! SameAsFinished()
   }
 
-  override def evaluate(input: Any): String = {
-    if(input.getClass() == classOf[StringBuilder]) {
+  override def evaluate(input: StringBuilder): Unit = {
       val isb: StringBuilder = input.asInstanceOf[StringBuilder]
       val sb = new StringBuilder()
       val firstLine = isb.lines.next()
-      isb.insert(0, firstLine)
       val subject = firstLine.substring(0, firstLine.indexOf(">") + 1)
       val sameAsValues = idBuffer.getSameAs(subject)
       if (sameAsValues.size > 0) {
-        //sb.append(firstLine.replace(subject, sameAsValues(0)))
         for (line <- isb.lines)
           sb.append(line.replace(subject, sameAsValues(0)))
         outputWriter ! InsertJoinedSubject(sb)
-        return null
       }
       outputWriter ! InsertJoinedSubject(isb)
-    }
-    else
-      Main.logger.warning("Actor " + self.path.name + ": evaluate function was not called with a StringBuilder")
-    null
   }
 
-  override def action(evalResult: String): Unit =
+  override def action(evalResult: Unit): Unit =
   {
 
   }

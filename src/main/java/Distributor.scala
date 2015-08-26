@@ -12,6 +12,7 @@ import scala.collection.parallel.mutable.ParHashMap
 class Distributor() extends Actor{
 
   private val outputWriter = context.actorOf(Props(classOf[JoinedKbCollector]), "output")
+  private val evalWriter = context.actorOf(Props(classOf[CompResultWriter]))
   private val kbMap : ParHashMap[String, (ActorRef, ActorRef)] = new mutable.HashMap[String, (ActorRef, ActorRef)]().par
   for(kbSpecs <- Main.config.kbMap)
   {
@@ -22,6 +23,7 @@ class Distributor() extends Actor{
   private var centralSameAsBuffer: ConcurrentIdBuffer = null
   private val tempfiles: util.ArrayList[String] = new util.ArrayList[String]()
   private val sameAsActor = context.actorOf(Props(classOf[SameAsProcessor],outputWriter), "sameas")
+  private val evalActor = context.actorOf(Props(classOf[PropertyCompProcessor],evalWriter), "evalWriter")
 
 
   override def receive: Receive =
@@ -39,9 +41,8 @@ class Distributor() extends Actor{
     }
     case StartSameAsActor(fnames, buf) =>
     {
-      val arr = tempfiles.toArray(new Array[String](tempfiles.size))
       if(sameAsActor != null)
-        sameAsActor ! StartSameAsActor(arr, centralSameAsBuffer)
+        sameAsActor ! StartSameAsActor(tempfiles.toArray(new Array[String](tempfiles.size)), centralSameAsBuffer)
       else
         Main.logger.severe("sameAs actor was not initialized yet!")
     }
@@ -49,8 +50,11 @@ class Distributor() extends Actor{
     {
       //TODO merge sort is buggy
       //new ParallelMergeSort().sort(Main.getInputStream(tempFileName), Main.config.outFile)
+      //TODO 
       if(Main.config.outFile == filename)
         context.system.shutdown()
+      if(Main.config.outFile == filename)
+        evalActor ! StartProcess
       if(this.kbMap.keySet.contains(actor))
       {
         kbMap.update(actor, (sender, null))

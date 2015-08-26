@@ -50,4 +50,6 @@ object Main {
   case class NewWriter()
   case class NewWriterResponse(writer: ActorRef)
   case class StartSameAsActor(filenames: Array[String], idBuffer: ConcurrentIdBuffer)
+  case class AddCompResult(kb1: String, kb2: String, property: String, reult: (Int, Int))
+  case class DoComparisonFor(writer: ActorRef, inpiut: String)
 }
