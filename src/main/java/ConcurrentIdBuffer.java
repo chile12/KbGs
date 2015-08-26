@@ -1,10 +1,12 @@
 
-import akka.util.ConcurrentMultiMap;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multiset;
 import scala.collection.Iterator;
-import scala.collection.Iterable;
 import scala.collection.immutable.List;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Map;
 
 /**
  * Created by Chile on 8/24/2015.
@@ -12,13 +14,15 @@ import java.util.Comparator;
 public class ConcurrentIdBuffer {
 
     private Iterator<String> stremResource;
-    private ConcurrentMultiMap<String, String> map;
+    private HashMultimap<String, String> map;
+    private HashMultimap<String, String> sameAsIds;
     private int buffer;
 
     public ConcurrentIdBuffer(Iterator<String> stremResource, int bufferSize)
     {
         this.buffer = bufferSize;
-        this.map = new ConcurrentMultiMap<String, String>(bufferSize, new ExampleComparator());
+        this.map = HashMultimap.create();
+        this.sameAsIds = HashMultimap.create();
         this.stremResource = stremResource;
         for (int i =0; i < bufferSize; i++) {
             addFromResource(stremResource);
@@ -35,7 +39,7 @@ public class ConcurrentIdBuffer {
 
     public synchronized void remove(String uri)
     {
-            Iterable<String> rem = map.remove(uri).get();
+            map.removeAll(uri);
             for (int i = getKeys().size(); i < this.buffer; i++) {
                 if(stremResource.hasNext())
                     addFromResource(stremResource);
@@ -44,17 +48,17 @@ public class ConcurrentIdBuffer {
 
     public synchronized List<String> getValues(String key)
     {
-        return map.valueIterator(key).toList();
+        return scala.collection.JavaConverters.asScalaSetConverter(map.get(key)).asScala().toList();
     }
 
     public synchronized List<String> getKeys()
     {
-        return map.keys().toList();
+        return scala.collection.JavaConverters.asScalaSetConverter(map.keySet()).asScala().toList();
     }
 
     public synchronized boolean contains(String key)
     {
-        List<String> itr = map.keys().toList();
+        Multiset<String> itr = map.keys();
         if(itr.contains(key))
             return true;
         else
@@ -63,7 +67,41 @@ public class ConcurrentIdBuffer {
 
     public synchronized int size()
     {
-        return map.mapSize();
+        return map.size();
+    }
+
+    public synchronized void addSameAs(String key, String value)
+    {
+        this.sameAsIds.put(key, value);
+    }
+
+    public synchronized List<String> getSameAs(String key)
+    {
+        return scala.collection.JavaConverters.asScalaSetConverter(this.sameAsIds.get(key)).asScala().toList();
+    }
+
+    HashMultimap<String, String> getSameAsMap()
+    {
+        return this.sameAsIds;
+    }
+
+    void addSameAsBuffer(ConcurrentIdBuffer idBuffer)
+    {
+        this.sameAsIds.putAll(idBuffer.getSameAsMap());
+    }
+
+    /**
+     * to remove occurrences of x -> y & y -> x
+     */
+    public void normalizeSameAsLinks()
+    {
+        ArrayList<Map.Entry<String, String>> removeList = new ArrayList<Map.Entry<String, String>>();
+        for(Map.Entry<String, String> entry : sameAsIds.entries()){
+            if(sameAsIds.keySet().contains(entry.getValue()))
+                removeList.add(entry);
+        }
+        for(Map.Entry<String, String> entry : removeList)
+            sameAsIds.remove(entry.getKey(), entry.getValue());
     }
 
     public class ExampleComparator  implements Comparator<String> {

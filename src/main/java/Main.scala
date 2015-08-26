@@ -2,7 +2,7 @@ import java.io.{InputStream, FileInputStream, BufferedInputStream}
 import java.util.logging.{Level, Logger}
 import java.util.zip.GZIPInputStream
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem, Props}
 
 import scala.io.BufferedSource
 
@@ -19,15 +19,16 @@ object Main {
     val actorSystem = ActorSystem()
     config = new ConfigImpl(args(0))
     val distributor = actorSystem.actorOf(Props(classOf[Distributor]))
-    distributor ! StartReader
+    distributor ! StartProcess
+    //distributor ! StartSecondPass
   }
 
-  def getSource(path: String) : Iterator[String] =
+  def getSource(path: String) : BufferedSource =
   {
     if(path.trim().endsWith(".gz"))
-      new BufferedSource(getInputStream(path)).getLines()
+      new BufferedSource(getInputStream(path))
     else
-      new BufferedSource(getInputStream(path)).getLines()
+      new BufferedSource(getInputStream(path))
   }
 
   def getInputStream(path: String) : InputStream =
@@ -38,11 +39,15 @@ object Main {
       new BufferedInputStream(new FileInputStream(path))
   }
 
-  case class EvalRequest(input: StringBuilder, idBuffer: ConcurrentIdBuffer)
-  case class EvalResponse(uri: String)
   case class Finalize()
   case class InsertJoinedSubject(subj: StringBuilder)
-  case class StartReader()
-  case class Finished(kbid: String)
-  case class WriterClosed(fileName: String)
+  case class StartProcess()
+  case class Finished(idBuffer: ConcurrentIdBuffer)
+  case class WriterClosed(actor: String, fileName: String)
+  case class WriterStart(fileName: String, actor: String)
+  case class SameAsFinished()
+  case class FinishProcessor()
+  case class NewWriter()
+  case class NewWriterResponse(writer: ActorRef)
+  case class StartSameAsActor(filenames: Array[String], idBuffer: ConcurrentIdBuffer)
 }

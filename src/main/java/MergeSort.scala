@@ -12,7 +12,7 @@ import java.util.zip.GZIPOutputStream
 import scala.concurrent.{ExecutionContext, Future}
 import scala.io.Source
 
-class ParallelMergeSort {
+class MergeSort {
 
   /**
    * limits number of reading and sorting can be executed simultaneously. Because

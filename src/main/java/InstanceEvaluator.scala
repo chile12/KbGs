@@ -1,4 +1,4 @@
-import Main.{EvalRequest, InsertJoinedSubject}
+import Main.{InsertJoinedSubject}
 import akka.actor.{Actor, ActorRef}
 
 /**
@@ -55,11 +55,12 @@ class InstanceEvaluator(outputWriter: ActorRef, kbPrefix: String) extends Actor{
 
   override def receive: Receive =
   {
-    case EvalRequest(input: StringBuilder, idBuffer: ConcurrentIdBuffer) =>
+/*    case EvalRequest(input: StringBuilder, idBuffer: ConcurrentIdBuffer) =>
     {
       val uri = evaluateInstance(input, idBuffer)
       if(uri != null)
         idBuffer.remove(uri)
-    }
+    }*/
+    case _ =>
   }
 }
