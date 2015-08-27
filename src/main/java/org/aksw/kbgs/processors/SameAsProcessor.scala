@@ -1,5 +1,10 @@
+package org.aksw.kbgs.processors
+
+import org.aksw.kbgs.Main
 import Main._
 import akka.actor.{Actor, ActorRef}
+import org.aksw.kbgs.helpers.ConcurrentIdBuffer
+import org.aksw.kbgs.inout.InstanceReader
 
 
 /**

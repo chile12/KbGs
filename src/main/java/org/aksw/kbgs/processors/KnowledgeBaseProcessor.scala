@@ -1,5 +1,10 @@
+package org.aksw.kbgs.processors
+
+import org.aksw.kbgs.Main
 import Main._
 import akka.actor.{Actor, ActorRef}
+import org.aksw.kbgs.helpers.ConcurrentIdBuffer
+import org.aksw.kbgs.inout.InstanceReader
 
 /**
  * Created by Chile on 8/23/2015.
@@ -45,7 +50,6 @@ class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Act
               idBuffer.addSameAs(String.format(newUriStump, thisIds(i)), String.format(newUriStump, thisIds(0)))
             }
           }
-          val test = sb.toString()
           tempWriter ! InsertJoinedSubject(sb)
           return uri
         }

@@ -1,6 +1,8 @@
+package org.aksw.kbgs.helpers
+
 
 import org.openrdf.model.{Model, Statement}
-import org.openrdf.rio.{ RDFHandler}
+import org.openrdf.rio.RDFHandler
 
 import scala.collection.mutable.HashMap
 
@@ -12,7 +14,10 @@ class MultiContextHandler(modelMap: HashMap[String, Model]) extends RDFHandler{
   override def handleStatement(st: Statement): Unit = {
     val context = st.getContext
     val m = modelMap.get(context.stringValue())
+    if(m != null)
       m.get.add(st)
+    else
+      System.out.print(st.toString)
   }
 
   override def startRDF(): Unit =

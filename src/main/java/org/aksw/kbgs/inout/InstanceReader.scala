@@ -1,3 +1,7 @@
+package org.aksw.kbgs.inout
+
+import org.aksw.kbgs.Main
+
 /**
  * Created by Chile on 8/25/2015.
  * 
@@ -27,7 +31,7 @@ class InstanceReader[T](sourcePath: String) {
     finished = true
   }
 
-  private def readNextSubject: StringBuilder =
+  def readNextSubject(): StringBuilder =
   {
     val sb = new StringBuilder()
     val subject = lastRead.substring(0, lastRead.indexOf(">")+1)
@@ -51,6 +55,6 @@ class InstanceReader[T](sourcePath: String) {
 
   def notFinished(): Boolean =
   {
-    return !finished
+    !finished
   }
 }

@@ -1,8 +1,12 @@
+package org.aksw.kbgs.processors
+
 import java.io.StringReader
 
-import Main.{DoComparisonFor, AddCompResult}
+import org.aksw.kbgs.Main
+import org.aksw.kbgs.Main._
 import akka.actor.{Actor, ActorRef}
 import com.google.common.collect.HashBasedTable
+import org.aksw.kbgs.helpers.MultiContextHandler
 import org.openrdf.model.Model
 import org.openrdf.model.impl.{TreeModel, URIImpl}
 import org.openrdf.query.algebra.evaluation.util.ValueComparator
@@ -13,12 +17,15 @@ import scala.collection.mutable.HashMap
 /**
  * Created by Chile on 8/26/2015.
  */
-class InstancePropertyComparison() extends Actor{
+class KbComparatWorker() extends Actor{
 
-  if (InstancePropertyComparison.modelMap.size == 0)
-    InstancePropertyComparison.fillModelMap()
-  val modelMap = InstancePropertyComparison.modelMap.clone()
+  if (KbComparatWorker.modelMap.size == 0)
+    KbComparatWorker.fillModelMap()
+  val modelMap = KbComparatWorker.modelMap.clone()
   val compTable = HashBasedTable.create[String, String, HashMap[String, Int]]()
+  var broadcastId: String = null
+  var boss: ActorRef = null
+  var writer: ActorRef = null
 
   private var compdone = false
 
@@ -51,7 +58,7 @@ class InstancePropertyComparison() extends Actor{
     compdone = true
   }
 
-  def sendResultsTo(writer: ActorRef, input: String): Unit =
+  def sendResults(input: String): Unit =
   {
     if(!compdone)
       doCompare(input)
@@ -64,13 +71,20 @@ class InstancePropertyComparison() extends Actor{
         }
       }
     }
+    boss ! GimmeWork(broadcastId)
   }
 
   def getResultFor(kb1: String, kb2: String, property: String): (Int, Int) = {
 
     val valueMap = compTable.get(kb1, kb2)
-    if(property != null)
-      return (valueMap.get(property).get, 1)
+    val prop = valueMap.get(property)
+    if(property != null) {
+      if (prop != None)
+        return (valueMap.get(property).get, 1)
+      else
+        return null
+    }
+
     evalPropTable(valueMap)
   }
 
@@ -88,15 +102,25 @@ class InstancePropertyComparison() extends Actor{
 
   override def receive: Receive =
   {
-    case DoComparisonFor(writer, input) =>
+    case InitializeWorker(id, inits) =>
     {
-      sendResultsTo(writer, input)
+      if(broadcastId == null) {
+        boss = sender()
+        broadcastId = id
+        writer = inits.asInstanceOf[Array[ActorRef]](0)
+        boss ! GimmeWork(id)
+      }
+    }
+    case Work(work) =>
+    {
+      val zw = work.asInstanceOf[StringBuilder]
+      sendResults(zw.toString())
     }
     case _ =>
   }
 }
 
-object InstancePropertyComparison{
+object KbComparatWorker{
   private val modelMap: HashMap[String, Model] = new HashMap[String, Model]()
 
   private def fillModelMap(): Unit =

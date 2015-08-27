@@ -1,3 +1,5 @@
+package org.aksw.kbgs.inout
+
 /**
  * Created by Chile on 8/23/2015.
  */

@@ -1,5 +1,9 @@
-import Main.{InsertJoinedSubject}
+package org.aksw.kbgs.processors
+
+import org.aksw.kbgs.Main
+import Main.InsertJoinedSubject
 import akka.actor.{Actor, ActorRef}
+import org.aksw.kbgs.helpers.ConcurrentIdBuffer
 
 /**
  * Created by Chile on 8/24/2015.

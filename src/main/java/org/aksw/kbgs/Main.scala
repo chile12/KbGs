@@ -1,8 +1,13 @@
-import java.io.{InputStream, FileInputStream, BufferedInputStream}
+package org.aksw.kbgs
+
+import java.io._
 import java.util.logging.{Level, Logger}
-import java.util.zip.GZIPInputStream
+import java.util.zip.{GZIPOutputStream, GZIPInputStream}
 
 import akka.actor.{ActorRef, ActorSystem, Props}
+import com.fasterxml.sort.SortConfig
+import com.fasterxml.sort.std.TextFileSorter
+import org.aksw.kbgs.helpers.{ConcurrentIdBuffer, ConfigImpl}
 
 import scala.io.BufferedSource
 
@@ -39,6 +44,15 @@ object Main {
       new BufferedInputStream(new FileInputStream(path))
   }
 
+  def mergeSort(infile: String, outfile: String): Unit=
+  {
+    val outputStream = new GZIPOutputStream(new FileOutputStream(new File(outfile)))
+    val inputStream = Main.getInputStream(infile)
+    val sorter = new TextFileSorter(new SortConfig().withMaxMemoryUsage((config.sortMemUsage * 1024 * 1024)))  //
+    sorter.sort(inputStream, outputStream)
+    sorter.close()
+  }
+
   case class Finalize()
   case class InsertJoinedSubject(subj: StringBuilder)
   case class StartProcess()
@@ -52,4 +66,9 @@ object Main {
   case class StartSameAsActor(filenames: Array[String], idBuffer: ConcurrentIdBuffer)
   case class AddCompResult(kb1: String, kb2: String, property: String, reult: (Int, Int))
   case class DoComparisonFor(writer: ActorRef, inpiut: String)
+  case class GimmeWork(broadcastId: String)
+  case class InitializeWorker(broadcastId: String, inits: Seq[Any])
+  case class WorkersInitialized(broadcastId: String)
+  case class Work[T](work: T)
+  case class RegisterNewProcess[T, W](inits: InitProcessStruct[T,W])
 }

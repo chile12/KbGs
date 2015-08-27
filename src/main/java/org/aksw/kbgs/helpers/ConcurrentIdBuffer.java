@@ -1,4 +1,4 @@
-
+package org.aksw.kbgs.helpers;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multiset;
 import scala.collection.Iterator;
@@ -80,12 +80,12 @@ public class ConcurrentIdBuffer {
         return scala.collection.JavaConverters.asScalaSetConverter(this.sameAsIds.get(key)).asScala().toList();
     }
 
-    HashMultimap<String, String> getSameAsMap()
+    public HashMultimap<String, String> getSameAsMap()
     {
         return this.sameAsIds;
     }
 
-    void addSameAsBuffer(ConcurrentIdBuffer idBuffer)
+    public void addSameAsBuffer(ConcurrentIdBuffer idBuffer)
     {
         this.sameAsIds.putAll(idBuffer.getSameAsMap());
     }

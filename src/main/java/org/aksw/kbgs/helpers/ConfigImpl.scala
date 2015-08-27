@@ -1,3 +1,5 @@
+package org.aksw.kbgs.helpers
+
 import java.io.File
 
 import akka.actor.Actor.Receive
@@ -26,6 +28,7 @@ class ConfigImpl(path: String) {
   val propEvalFile = config.get("propEval").get.toString
   val tempFile = outFile.substring(0, outFile.lastIndexOf('.')) + ".tmp" + outFile.substring(outFile.lastIndexOf('.'))
   val properties = config.get("properties").get.asInstanceOf[Map[String, Map[String, String]]]
+  val sortMemUsage = config.get("sortMemUsage").get.asInstanceOf[Int]
 }
 
 object ConfigImpl{
