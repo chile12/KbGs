@@ -130,7 +130,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>Main</mainClass>
+                            <mainClass>org.aksw.kbgs.Main</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
