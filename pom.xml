@@ -71,9 +71,9 @@
             <version>2.6.0</version>
         </dependency>
         <dependency>
-            <groupId>com.fasterxml.util</groupId>
-            <artifactId>java-merge-sort</artifactId>
-            <version>1.0.0</version>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-guava</artifactId>
+            <version>2.4.0</version>
         </dependency>
 
     </dependencies>

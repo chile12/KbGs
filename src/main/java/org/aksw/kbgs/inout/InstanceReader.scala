@@ -1,6 +1,7 @@
 package org.aksw.kbgs.inout
 
 import org.aksw.kbgs.Main
+import org.openrdf.rio.RDFParseException
 
 /**
  * Created by Chile on 8/25/2015.
@@ -33,13 +34,30 @@ class InstanceReader[T](sourcePath: String) {
 
   def readNextSubject(): StringBuilder =
   {
+    if(source.isEmpty)
+      return null
     val sb = new StringBuilder()
     val subject = lastRead.substring(0, lastRead.indexOf(">")+1)
+    if(subject == "")
+      throw new RDFParseException("source file " + sourcePath + " is not in a valid nt-rdf serialization!")
     sb.append(lastRead)
     while (read().startsWith(subject)) {
       sb.append(lastRead)
     }
     sb
+  }
+
+  def pagesSeqLoader(fill: Array[Object], start: Int, end: Int): Int =
+  {
+    var r = -1
+    for(i <- start until end)
+      if(source.isEmpty){
+        if(r < 0)
+          r+=1
+        fill(i) = readNextSubject()
+        r+=1
+      }
+    r
   }
 
   private def read(): String =
@@ -48,7 +66,7 @@ class InstanceReader[T](sourcePath: String) {
       lastRead = source.next().trim + "\n"
     else {
       finished = true
-      return ""
+      lastRead = ""
     }
     lastRead
   }

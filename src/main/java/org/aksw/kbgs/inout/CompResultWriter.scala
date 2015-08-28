@@ -1,13 +1,14 @@
 package org.aksw.kbgs.inout
 
 import java.io._
+import java.util
 
-import akka.actor.Actor
+import akka.actor.{Actor, ActorRef}
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import com.fasterxml.jackson.datatype.guava.GuavaModule
 import com.google.common.collect.HashBasedTable
 import org.aksw.kbgs.Main
-import org.aksw.kbgs.Main.{AddCompResult, Finalize, WriterClosed}
+import org.aksw.kbgs.Main.{AddCompResult, Finalize, RegistrateNewWriterSource, WriterClosed}
 
 import scala.collection.mutable
 
@@ -16,31 +17,41 @@ import scala.collection.mutable
  */
 class CompResultWriter extends Actor{
 
-  val propResultMap = HashBasedTable.create[String, String, mutable.HashMap[String, (Int, Int)]]()
+  val propResultTable = new util.HashMap[String, Array[java.lang.Float]]()
+  val propResultMap = HashBasedTable.create[String, String, mutable.HashMap[String, (Float, Int)]]()
+  var sourceMap = new mutable.HashMap[ActorRef, Boolean]()
 
   override def receive: Receive =
   {
-    case AddCompResult(kb1: String, kb2: String, property: String, result: (Int, Int)) =>
+    case AddCompResult(kb1: String, kb2: String, property: String, result: (Float, Int)) =>
     {
-      var kbc = propResultMap.get(kb1, kb2)
-      if(kbc == null)
-        kbc = propResultMap.put(kb1, kb2, new mutable.HashMap[String, (Int, Int)])
+      var value = propResultTable.get(kb1 + "," + kb2 + "," + property)
+      if(value == null)
+        value = propResultTable.get(kb2 + "," + kb1 + "," + property)
+      if(value == null)
+      {
+        propResultTable.put(kb1 + "," + kb2 + "," + property, Array(0f, 0f))
+        value = propResultTable.get(kb1 + "," + kb2 + "," + property)
+      }
 
-      kbc = propResultMap.get(kb1, kb2)
-      //kbc.update(property, (kbc.get(property).get._1 + result._1, kbc.get(property).get._2 + result._2))
+      value(0) = value(0) + result._1
+      value(1) = value(1) + result._2
     }
-    case Finalize() =>
+    case Finalize =>
     {
-      val zip = new FileOutputStream(new File(Main.config.propEvalFile))
-      val writer = new BufferedWriter(new OutputStreamWriter(zip, "UTF-8"))
-      val mapper = new ObjectMapper()
-      mapper.registerModule(DefaultScalaModule)
-      mapper.writeValue(writer, propResultMap)
-      writer.flush()
-      writer.close()
+      if(sourceMap.keySet.contains(sender))
+        sourceMap.update(sender, true)
+      if(sourceMap.values.forall((x) => x == true)) {
+        val mapper = new ObjectMapper()
+        mapper.registerModule(new GuavaModule())
+        mapper.writeValue(new File(Main.config.propEvalFile), propResultTable)
 
-      context.parent ! WriterClosed("", Main.config.propEvalFile)
+        context.parent ! WriterClosed("", Main.config.propEvalFile)
+      }
     }
+    case RegistrateNewWriterSource =>
+      if(!sourceMap.keySet.contains(sender))
+        sourceMap.put(sender, false)
     case _ =>
   }
 }

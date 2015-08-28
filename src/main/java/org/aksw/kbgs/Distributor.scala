@@ -57,8 +57,8 @@ class Distributor() extends Actor{
     }
     case StartProcess =>
     {
-      //kbMap.values.map(x => x._1 ! StartProcess())
-      evalActor ! StartProcess
+      kbMap.values.map(x => x._1 ! StartProcess())
+      //evalActor ! StartProcess
     }
     case WorkersInitialized(id) =>
 

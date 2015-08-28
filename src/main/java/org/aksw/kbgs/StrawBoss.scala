@@ -2,6 +2,7 @@ package org.aksw.kbgs
 
 import akka.actor.{Actor, ActorRef, Props}
 import org.aksw.kbgs.Main._
+import org.aksw.kbgs.inout.InstanceReader
 
 import scala.collection.mutable._
 import scala.reflect.ClassTag
@@ -11,46 +12,45 @@ import scala.reflect.ClassTag
  */
 class StrawBoss extends Actor{
 
-  private val workMap = new HashMap[String, ((() => _ <: Any), Queue[_ <: Any])]()
+  private val workMap = new HashMap[String, InstanceReader[Unit]]()
   private val workerMap = new HashMap[String, MutableList[ActorRef]]()
+  private val parentMap = new HashMap[String, ActorRef]()
   private val queueSize = 30
 
-  def registerNewProcess[T <: Any, W <: Any](intStruct: InitProcessStruct[T, W]) (implicit tag: ClassTag[T]): Unit =
+  def registerNewProcess[T <: Any, W <: Any](intStruct: InitProcessStruct[W]) (implicit tag: ClassTag[W]): Unit =
   {
-    workMap.put(intStruct.broadcastId, (intStruct.nextPackage, new Queue[W]()))
-    val wl = workerMap.put(intStruct.broadcastId, new MutableList[ActorRef]()).get
+    workMap.put(intStruct.broadcastId, (new InstanceReader[Unit](intStruct.sourceFile)))
+    workerMap.put(intStruct.broadcastId, new MutableList[ActorRef]())
+    val wl = workerMap.get(intStruct.broadcastId).get
     for(i <- 0 until intStruct.workerCount)
     {
-      wl += context.actorOf(Props(tag.runtimeClass, intStruct.actorSigObjcts))
+      if(intStruct.actorSigObjcts != null)
+        wl += context.actorOf(Props(intStruct.classTag.runtimeClass, intStruct.actorSigObjcts))
+      else
+        wl += context.actorOf(Props(intStruct.classTag.runtimeClass))
     }
   }
 
   def initializeWorkers(id: String, inits: scala.Seq[Any]): Unit =
   {
-    for(worker <- workerMap.get(id).map(x => x.head))
+    for(worker <- workerMap.get(id).get)
       worker ! InitializeWorker(id, inits)
-  }
-
-  private def loadMoreWork (queue: Queue[_], workLoadFunction: () => _): Unit =
-  {
-    while(queue.size < queueSize)
-    {
-      queue += workLoadFunction()
-    }
   }
 
   override def receive: Receive =
   {
     case RegisterNewProcess(intStruct) =>
     {
+      parentMap.put(intStruct.broadcastId, sender)
       registerNewProcess(intStruct)
     }
     case GimmeWork(id : String) => {
-      val zw = workMap.get(id).get
-      val zww = zw._2.headOption
-      if (zww != None)
-        sender ! Work(zww.get)
-      loadMoreWork(workMap.get(id))
+      val zw = workMap.get(id).get.readNextSubject()
+      if( zw != null && zw != None)
+        sender ! Work(zw)
+      else {
+        sender ! Finalize
+      }
     }
     case InitializeWorker(id, inits) => {
       initializeWorkers(id, inits)
@@ -58,12 +58,13 @@ class StrawBoss extends Actor{
     }
     case _ =>
   }
-
 }
 
-class InitProcessStruct[T, W <: AnyVal]{
+class InitProcessStruct[W <: Any]{
   var broadcastId: String = null
   var workerCount: Integer = null
   var nextPackage:() => W = null
   var actorSigObjcts: Array[Any] = null
+  var classTag : ClassTag[_] = null
+  var sourceFile: String = null
 }
