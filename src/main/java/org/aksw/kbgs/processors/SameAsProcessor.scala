@@ -1,45 +1,41 @@
 package org.aksw.kbgs.processors
 
-import org.aksw.kbgs.Main
-import Main._
 import akka.actor.{Actor, ActorRef}
-import org.aksw.kbgs.helpers.ConcurrentIdBuffer
+import com.google.common.collect.HashMultimap
+import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.inout.InstanceReader
+import org.aksw.kbgs.workers.SameAsWorker
+import org.aksw.kbgs.{InitProcessStruct, Main}
 
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.reflect.ClassTag
 
 /**
  * Created by Chile on 8/25/2015.
  */
-class SameAsProcessor(outputWriter: ActorRef) extends Actor with InstanceProcessor[Unit] {
+class SameAsProcessor(contractor: ActorRef, idBuffer: HashMultimap[String, String], outputWriter: ActorRef) extends Actor with InstanceProcessor[StringBuilder, Unit] {
 
-  var filenames: Array[String] = null
-  var idBuffer:ConcurrentIdBuffer = null
+  var filenames: List[String] = null
   //second pass: resolve same as links -> one resource has just one identifier
   override def startProcess(): Unit =
   {
     outputWriter ! WriterStart(Main.config.outFile, outputWriter.path.name)
-    idBuffer.normalizeSameAsLinks()
-    for(filename <- filenames) {
-      val instanceReader = new InstanceReader[Unit](filename)
-      while (instanceReader.notFinished())
-        instanceReader.readSubject(evaluate, action)
-    }
-    outputWriter ! Finalize()
-    context.parent ! SameAsFinished()
+    val instanceReader = new InstanceReader(filenames)
+//      while (instanceReader.notFinished())
+//        evaluate(instanceReader.readNextSubject()).onSuccess{case s: Unit => action(s)}
+    val inits = new InitProcessStruct()
+    inits.broadcastId = "compareKb"
+    inits.workerCount = 4
+    val zz = classOf[SameAsWorker]
+    inits.classTag = ClassTag(zz)
+    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](idBuffer, outputWriter)
+    contractor ! RegisterNewWorkPackage(inits, instanceReader)
+    contractor ! InitializeWorker(null)
   }
 
-  override def evaluate(input: StringBuilder): Unit = {
-      val isb: StringBuilder = input.asInstanceOf[StringBuilder]
-      val sb = new StringBuilder()
-      val firstLine = isb.lines.next()
-      val subject = firstLine.substring(0, firstLine.indexOf(">") + 1)
-      val sameAsValues = idBuffer.getSameAs(subject)
-      if (sameAsValues.size > 0) {
-        for (line <- isb.lines)
-          sb.append(line.replace(subject, sameAsValues(0)))
-        outputWriter ! InsertJoinedSubject(sb)
-      }
-      outputWriter ! InsertJoinedSubject(isb)
+  override def evaluate(input: StringBuilder): Future[Unit] = Future{
+
   }
 
   override def action(evalResult: Unit): Unit =
@@ -49,15 +45,19 @@ class SameAsProcessor(outputWriter: ActorRef) extends Actor with InstanceProcess
 
   override def receive: Receive =
   {
-    case StartSameAsActor(fNames, buf) => {
+    case StartSameAsActor(fNames) => {
       filenames = fNames
-      idBuffer = buf
       startProcess()
     }
-    case FinishProcessor() =>
+    case Finished =>
       finish()
     case _ =>
   }
 
-  override def finish(): Unit = ???
+  override def finish(): Unit =
+  {
+    outputWriter ! Finalize
+    context.parent ! SameAsFinished()
+    context.stop(self)
+  }
 }

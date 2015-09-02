@@ -7,8 +7,8 @@ import akka.actor.{Actor, ActorRef}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.guava.GuavaModule
 import com.google.common.collect.HashBasedTable
+import org.aksw.kbgs.Contractor.{RegistrateNewWriterSource, WriterClosed, Finalize, AddCompResult}
 import org.aksw.kbgs.Main
-import org.aksw.kbgs.Main.{AddCompResult, Finalize, RegistrateNewWriterSource, WriterClosed}
 
 import scala.collection.mutable
 
@@ -23,7 +23,7 @@ class CompResultWriter extends Actor{
 
   override def receive: Receive =
   {
-    case AddCompResult(kb1: String, kb2: String, property: String, result: (Float, Int)) =>
+    case AddCompResult(kb1: String, kb2: String, property: String, result: (Option[Float], Int)) =>
     {
       var value = propResultTable.get(kb1 + "," + kb2 + "," + property)
       if(value == null)
@@ -34,8 +34,9 @@ class CompResultWriter extends Actor{
         value = propResultTable.get(kb1 + "," + kb2 + "," + property)
       }
 
-      value(0) = value(0) + result._1
-      value(1) = value(1) + result._2
+      if(result._1 != None)
+        value(0) = value(0) + result._1.get
+      value(1) = value(1) + 1f
     }
     case Finalize =>
     {
@@ -45,7 +46,6 @@ class CompResultWriter extends Actor{
         val mapper = new ObjectMapper()
         mapper.registerModule(new GuavaModule())
         mapper.writeValue(new File(Main.config.propEvalFile), propResultTable)
-
         context.parent ! WriterClosed("", Main.config.propEvalFile)
       }
     }

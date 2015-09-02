@@ -1,7 +1,7 @@
 package org.aksw.kbgs.processors
 
+import org.aksw.kbgs.Contractor.InsertJoinedSubject
 import org.aksw.kbgs.Main
-import Main.InsertJoinedSubject
 import akka.actor.{Actor, ActorRef}
 import org.aksw.kbgs.helpers.ConcurrentIdBuffer
 

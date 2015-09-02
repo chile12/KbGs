@@ -4,11 +4,28 @@ sudo cat -u `find ./* -maxdepth 0 -type f -name '*.nt' -print` > BNBLODB_201507.
 sort with 8 cores
 sudo sort --parallel=8 -uo BNBLODB_201507_sorted.nt BNBLODB_201507.nt
 
-extract isbns with subject (unclean with appendix)
-cat bnb_marc.mrc_triples_isbn_unclean.nt | grep -P '(?<=http://purl.org/ontology/bibo/isbn).*' | cat | perl -ne 's/(^[^<]*)(<[^>]+>)([^"]*")(.*)/$2 - $4/g; print;'  | perl -ne 's/(?<= - )([\D]*)([\d]+)(.*)/$2/g; print;' | perl -ne 's/(?<= - )(\d{12}).*/$1/g; print;' | perl -ne 's|(?<= - )(\d{9})(\d)(?=\D)|$1|g; print;' |  perl -ne 's/(?<= - )(\D*)(?=(\d{9})\D)/978/g; print;' > bnb_isbns.txt
+//extract isbns with subject (unclean with appendix)
+//cat bnb_marc.mrc_triples_isbn_unclean.nt | grep -P '(?<=http://purl.org/ontology/bibo/isbn).*' | cat | perl -ne 's/(^[^<]*)(<[^>]+>)([^"]*")(.*)/$2 - $4/g; print;'  | perl -ne 's/(?<= - )([\D]*)([\d]+)(.*)/$2/g; print;' | perl -ne 's/(?<= - )(\d{12}).*/$1/g; print;' | perl -ne 's|(?<= - )(\d{9})(\d)(?=\D)|$1|g; print;' |  perl -ne 's/(?<= - )(\D*)(?=(\d{9})\D)/978/g; print;' > bnb_isbns.txt
 
-extract isbns only
-cat bnb_isbns.txt | perl -ne 's/(^.* - )(.*)/$2/g; print;' | sort > bnb_isbns_only.txt
+//create file with subject - id, with uncleaned ids
+bzip2 -dkc /media/bigone/25TB/www/downloads.dbpedia.org/2015-04/core-i18n/en/mappingbased-properties_en.nt.bz2 |
+grep -P '(?<=http://dbpedia.org/ontology/isbn).*' |
+cat | perl -ne 's/(^[^<]*)(<[^>]+>)([^"]*")([^"]+)(".*)/$2 - "$4"/g; print;'  > dbpedia_unclean.txt
+
+//clean ids
+cat dbpedia_unclean.txt | perl -ne '
+if(s/(^[^>]*> - )(.*")/$1/g){
+$rr = $1; $tt=$2;
+$tt =~ s/(-|_|"|\(|\))//g;
+$tt =~ s/([\D]*)([\d]+)(.*)/$2\./g;
+$tt =~ s/\D{2,}//g;
+$tt =~ s/(\d{12}).*/$1\.\n/g;
+$tt =~ s|^(\d{9})(\d)(\D)|$1\.\n|g;
+$tt =~ s/^(\D*)(?=(\d{9})\.)/978/g;
+$tt =~ s/\D+//g;
+print "$rr$tt\n";}'
+ | sort > bnb_isbns_only.txt
+//print without $rr for isbns only!
 
 (gzipped)
 gunzip -c cambridge.nt.gz | cat | grep ... |... so. >...

@@ -1,5 +1,7 @@
 package org.aksw.kbgs.inout
 
+import java.util
+
 import org.aksw.kbgs.Main
 import org.openrdf.rio.RDFParseException
 
@@ -8,71 +10,54 @@ import org.openrdf.rio.RDFParseException
  * 
  * used for reading the whole instance of a resource from a sorted ntriple file
  */
-class InstanceReader[T](sourcePath: String) {
+class InstanceReader(sourcePaths: List[String]) extends WorkLoader[StringBuilder]{
 
-  private val source = Main.getSource(sourcePath).getLines()
+  private var source = new util.ArrayList[Iterator[String]]()
+  for(s <- sourcePaths)
+  {
+    val zw = Main.getSource(s).getLines()
+    source.add(zw)
+
+  }
   private var lastRead: String = null
   private var finished = false
   read()  //get first line
 
-  /**
-   * creates and sends the full instance (with all (mapped) properties, defined by the uri to the outputWriter
-   * @return uri of the completed instance
-   */
-  def readSubject(evalFunction: (StringBuilder) => T, resultFunction:(T) => Unit): Unit=
-  {
-    while(source.hasNext)
-    {
-      val retVal = evalFunction(readNextSubject)
-      if(retVal != null && resultFunction != null) {
-        resultFunction(retVal)
-        return
-      }
-    }
-    finished = true
-  }
-
-  def readNextSubject(): StringBuilder =
+  override def next(): StringBuilder =
   {
     if(source.isEmpty)
       return null
+    if(lastRead.trim.length == 0)
+    {
+      read()
+      return next()
+    }
     val sb = new StringBuilder()
     val subject = lastRead.substring(0, lastRead.indexOf(">")+1)
     if(subject == "")
-      throw new RDFParseException("source file " + sourcePath + " is not in a valid nt-rdf serialization!")
+      throw new RDFParseException("source file " + sourcePaths + " is not in a valid nt-rdf serialization!")
     sb.append(lastRead)
     while (read().startsWith(subject)) {
       sb.append(lastRead)
     }
     sb
   }
-
-  def pagesSeqLoader(fill: Array[Object], start: Int, end: Int): Int =
-  {
-    var r = -1
-    for(i <- start until end)
-      if(source.isEmpty){
-        if(r < 0)
-          r+=1
-        fill(i) = readNextSubject()
-        r+=1
-      }
-    r
-  }
-
   private def read(): String =
   {
-    if(source.hasNext)
-      lastRead = source.next().trim + "\n"
-    else {
-      finished = true
-      lastRead = ""
+    if(source.size() > 0) {
+      while (source.get(0).isEmpty) {
+        source.remove(0)
+        if (source.size() == 0)
+          finished = true
+        lastRead = ""
+        return ""
+      }
+      if (source.get(0).hasNext)
+        lastRead = source.get(0).next().trim + "\n"
+      return lastRead
     }
-    lastRead
+    ""
   }
 
-  def notFinished(): Boolean =
-  {
-    !finished
-  }
+  override def hasNext: Boolean = !finished
 }

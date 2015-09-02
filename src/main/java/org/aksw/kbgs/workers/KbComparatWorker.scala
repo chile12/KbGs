@@ -1,14 +1,14 @@
-package org.aksw.kbgs.processors
+package org.aksw.kbgs.workers
 
 import java.io.StringReader
 
 import akka.actor.{Actor, ActorRef}
 import com.google.common.collect.HashBasedTable
+import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.Main
-import org.aksw.kbgs.Main._
 import org.aksw.kbgs.helpers.MultiContextHandler
-import org.openrdf.model.{Value, Model}
 import org.openrdf.model.impl.{TreeModel, URIImpl}
+import org.openrdf.model.{Model, Value}
 import org.openrdf.query.algebra.evaluation.util.ValueComparator
 import org.openrdf.rio.RDFParseException
 import org.openrdf.rio.nquads.NQuadsParser
@@ -22,7 +22,6 @@ class KbComparatWorker() extends Actor{
 
   var modelMap: HashMap[String, Model] = null
   var compTable: HashBasedTable[String, String, HashMap[String, Option[Float]]] = null
-  var broadcastId: String = null
   var boss: ActorRef = null
   var writer: ActorRef = null
   val comparator = new ValueComparator()
@@ -54,7 +53,7 @@ class KbComparatWorker() extends Actor{
           for (prop <- Main.config.properties) {
             val uri1 = prop._2.get(kb1)
             val uri2 = prop._2.get(kb2)
-            if(uri1 != None && uri1.get != null && uri1.get.length > 3 && uri2 != None && uri2.get != null && uri2.get.length > 3) {
+            if(uri1 != None && uri1.get.length > 3 && uri2 != None && uri2.get.length > 3) {
               val valSelector1 = modelMap.get(graph1).get.filter(null, new URIImpl(uri1.get), null).objects()
               val valSelector2 = modelMap.get(graph2).get.filter(null, new URIImpl(uri2.get), null).objects()
               var result =0
@@ -65,7 +64,7 @@ class KbComparatWorker() extends Actor{
               valueMap.put(prop._1, Option(result))
             }
             else
-              valueMap.put(prop._1, None)
+              valueMap.put(prop._1 + " not used", None)
           }
           compTable.put(kb1, kb2, valueMap)
         }
@@ -82,33 +81,41 @@ class KbComparatWorker() extends Actor{
         val kb2 = Main.config.kbMap.keys.toParArray.apply(j)
         if (i < j) {
           for (prop <- Main.config.properties) {
-            writer ! AddCompResult(kb1, kb2, prop._1, getResultFor(kb1, kb2, prop._1))
+            try {
+              new URIImpl(prop._2.get(kb1).get)
+              new URIImpl(prop._2.get(kb2).get)
+              writer ! AddCompResult(kb1, kb2, prop._1, getResultFor(kb1, kb2, prop._1))
+            }
+            catch {
+              case  e: Exception=>
+                1+1
+            }
           }
         }
       }
     }
-    boss ! GimmeWork(broadcastId)
+    boss ! GimmeWork()
   }
 
-  def getResultFor(kb1: String, kb2: String, property: String): (Float, Int) = {
+  def getResultFor(kb1: String, kb2: String, property: String): (Option[Float], Int) = {
 
     var valueMap = compTable.get(kb1, kb2)
     if(valueMap == null)
       valueMap = compTable.get(kb2, kb1)
-    val prop = valueMap.get(property)
     if(property != null) {
+      val prop = valueMap.get(property)
       //TODO Option[Float]!!
       if (prop != None)
-        return (if(valueMap.get(property).get != None) valueMap.get(property).get.get else 0f, 1)
+        return (prop.get, 1)
       else
-        return null
+        return (None, 1)
     }
 
     evalPropTable(valueMap)
   }
 
 
-  private def evalPropTable(compTable: HashMap[String, Option[Float]]): (Float, Int) = {
+  private def evalPropTable(compTable: HashMap[String, Option[Float]]): (Option[Float], Int) = {
     var all = 0
     var hit = 0f
     for (prop <- compTable)
@@ -117,20 +124,17 @@ class KbComparatWorker() extends Actor{
       hit += zw
       all += 1
     }
-    (hit, all)
+    (Option(hit), all)
   }
 
   override def receive: Receive =
   {
-    case InitializeWorker(id, inits) =>
+    case InitializeWorker(inits) =>
     {
-      if(broadcastId == null) {
         boss = sender()
-        broadcastId = id
         writer = inits.head.asInstanceOf[ActorRef]
         writer ! RegistrateNewWriterSource
-        boss ! GimmeWork(id)
-      }
+        boss ! GimmeWork()
     }
     case Work(work) =>
     {
@@ -138,13 +142,16 @@ class KbComparatWorker() extends Actor{
       sendResults(zw.toString())
     }
     case Finalize =>
-      writer ! Finalize
+    {
+      boss ! Finished
+      context.stop(self)
+    }
     case _ =>
   }
 }
 
-object KbComparatWorker{
-
+object KbComparatWorker
+{
   private def fillModelMap(): HashMap[String, Model] =
   {
     val modelMap: HashMap[String, Model] = new HashMap[String, Model]()
@@ -152,6 +159,6 @@ object KbComparatWorker{
       if (modelMap.get(prop._2.get("kbGraph").get) == None)
         modelMap.put(prop._2.get("kbGraph").get, new TreeModel())
     }
-    return modelMap
+    modelMap
   }
 }
