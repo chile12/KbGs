@@ -24,7 +24,7 @@ class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends
     else if(SystemUtils.IS_OS_UNIX)
     {
       scala.sys.process.Process("sort --parallel=8 -uo " + sortedFileName + " " + Main.config.outFile).!
-      scala.sys.process.Process("gzip " + Main.config.outFile).!
+      scala.sys.process.Process("gzip " + sortedFileName).!
       sortedFileName += ".gz"
     }
     System.out.println("sorting done :)")
