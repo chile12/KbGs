@@ -1,7 +1,5 @@
 package org.aksw.kbgs.processors
 
-import java.io.File
-
 import akka.actor.{Actor, ActorRef}
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.inout.InstanceReader
@@ -19,12 +17,16 @@ class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends
   private var inputEmpty = false
   override def startProcess(): Unit =
   {
-    val sortedFileName =  new File(Main.config.outFile.substring(0, Main.config.outFile.indexOf(".nq.gz")) + "Sorted.nq.gz")
+    var sortedFileName =  Main.config.outFile.substring(0, Main.config.outFile.indexOf(".nq.gz")) + "Sorted.nq"
     System.out.println("before sorting")
     if(SystemUtils.IS_OS_WINDOWS)
        true //TODO merge sort on windows
     else if(SystemUtils.IS_OS_UNIX)
-      scala.sys.process.Process("sort --parallel=8 -uo " + sortedFileName.getAbsolutePath + " " + Main.config.outFile).!
+    {
+      scala.sys.process.Process("sort --parallel=8 -uo " + sortedFileName + " " + Main.config.outFile).!
+      scala.sys.process.Process("gzip " + Main.config.outFile).!
+      sortedFileName += ".gz"
+    }
     System.out.println("sorting done :)")
 
     val inits = new InitProcessStruct()
@@ -32,7 +34,7 @@ class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends
     inits.workerCount = 4
     val zz = classOf[KbComparatWorker]
     inits.classTag = ClassTag(zz)
-    contractor ! RegisterNewWorkPackage(inits, new InstanceReader(List(sortedFileName.getAbsolutePath)))
+    contractor ! RegisterNewWorkPackage(inits, new InstanceReader(List(sortedFileName)))
     evalWriter ! WriterStart("propProc", self.path.name)
 
     val zw = new Array[ActorRef](1)

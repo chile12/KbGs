@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorRef, PoisonPill, Props}
 import com.google.common.collect.HashMultimap
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.helpers.ConfigImpl
-import org.aksw.kbgs.inout.{CompResultWriter, GzWriterActor}
+import org.aksw.kbgs.inout.{CompResultWriter, WriterActor}
 import org.aksw.kbgs.processors._
 
 import scala.collection.JavaConverters._
@@ -17,12 +17,12 @@ import scala.collection.parallel.mutable.ParHashMap
  */
 class Distributor() extends Actor{
 
-  private val outputWriter = context.actorOf(Props(classOf[GzWriterActor]), "output")
+  private val outputWriter = context.actorOf(Props(classOf[WriterActor]), "output")
   private val evalWriter = context.actorOf(Props(classOf[CompResultWriter]))
   private val kbMap : ParHashMap[String, (ActorRef, ActorRef)] = new mutable.HashMap[String, (ActorRef, ActorRef)]().par
   for(kbSpecs <- Main.config.kbMap)
   {
-    val tempWriter = context.actorOf(Props(classOf[GzWriterActor]), kbSpecs._1 + "temp")
+    val tempWriter = context.actorOf(Props(classOf[WriterActor]), kbSpecs._1 + "temp")
     val actor = context.actorOf(Props(classOf[KnowledgeBaseProcessor], tempWriter, kbSpecs._1), kbSpecs._1)
     kbMap.put(kbSpecs._1, (actor, tempWriter))
   }

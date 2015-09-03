@@ -96,7 +96,7 @@ object Contractor{
   case class InsertJoinedSubject(subj: StringBuilder)
   case class StartProcess()
   case class WriterClosed(actor: String, fileName: String)
-  case class WriterStart(fileName: String, actor: String)
+  case class WriterStart(fileName: String, actor: String, gzip: Boolean = true)
   case class SameAsFinished()
   case class FinishProcessor()
   case class NewWriter()

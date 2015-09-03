@@ -1,16 +1,16 @@
 package org.aksw.kbgs.inout
 
-import java.io.{BufferedWriter, File, FileOutputStream, OutputStreamWriter}
+import java.io._
 import java.util.zip.GZIPOutputStream
 
 import akka.actor.Actor
-import org.aksw.kbgs.Contractor.{WriterClosed, Finalize, InsertJoinedSubject, WriterStart}
+import org.aksw.kbgs.Contractor.{Finalize, InsertJoinedSubject, WriterClosed, WriterStart}
 
 /**
  * Created by Chile on 8/23/2015.
  */
-class GzWriterActor() extends Actor {
-  var zip: GZIPOutputStream = null
+class WriterActor() extends Actor {
+  var outputStream: OutputStream = null
   var writer: BufferedWriter = null
   var counter = 0
   var instCount = 0
@@ -20,12 +20,14 @@ class GzWriterActor() extends Actor {
 
   override def receive: Receive =
   {
-    case WriterStart(fileName,actor) =>
+    case WriterStart(fileName,actor, gzip) =>
     {
       this.filename = fileName
       this.actor = actor
-      zip = new GZIPOutputStream(new FileOutputStream(new File(fileName)))
-      writer = new BufferedWriter(new OutputStreamWriter(zip, "UTF-8"))
+      outputStream = new FileOutputStream(new File(fileName))
+      if(gzip)
+        outputStream = new GZIPOutputStream(outputStream)
+      writer = new BufferedWriter(new OutputStreamWriter(outputStream, "UTF-8"))
       counter = 0
       instCount = 0
     }
