@@ -2,7 +2,7 @@ package org.aksw.kbgs.workers
 
 import java.io.StringReader
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{PoisonPill, Actor, ActorRef}
 import com.google.common.collect.HashBasedTable
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.Main
@@ -144,7 +144,7 @@ class KbComparatWorker() extends Actor{
     case Finalize =>
     {
       boss ! Finished
-      context.stop(self)
+      self ! PoisonPill
     }
     case _ =>
   }

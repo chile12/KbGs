@@ -1,8 +1,9 @@
 package org.aksw.kbgs.workers
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{PoisonPill, Actor, ActorRef}
 import com.google.common.collect.HashMultimap
 import org.aksw.kbgs.Contractor._
+
 
 /**
  * Created by Chile on 8/29/2015.
@@ -43,7 +44,7 @@ class SameAsWorker(idBuffer:HashMultimap[String, String], writer: ActorRef) exte
     }
     case Finalize => {
       boss ! Finished
-      context.stop(self)
+      self ! PoisonPill
     }
     case _ =>
   }

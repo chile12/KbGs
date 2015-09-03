@@ -2,7 +2,7 @@ package org.aksw.kbgs
 
 import java.util
 
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{PoisonPill, Actor, ActorRef, Props}
 import akka.routing.{Broadcast, BroadcastRouter}
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.helpers.IdBuffer
@@ -80,7 +80,7 @@ class Contractor[W] extends Actor{
       {
         client ! Finished
         context.actorSelection("/user/distributor") ! Finished
-        context.stop(self)
+        self ! PoisonPill
       }
     }
     case _ =>

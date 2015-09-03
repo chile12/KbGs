@@ -1,6 +1,6 @@
 package org.aksw.kbgs.processors
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{PoisonPill, Actor, ActorRef}
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.inout.InstanceReader
 import org.aksw.kbgs.workers.KbComparatWorker
@@ -53,7 +53,7 @@ class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends
   override def finish(): Unit =
   {
     evalWriter ! Finalize
-    context.stop(self)
+    self ! PoisonPill
   }
 
   override def receive: Receive =

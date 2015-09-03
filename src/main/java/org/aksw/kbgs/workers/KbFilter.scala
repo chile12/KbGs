@@ -1,6 +1,6 @@
 package org.aksw.kbgs.workers
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{PoisonPill, Actor, ActorRef}
 import com.google.common.collect.HashMultimap
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.Main
@@ -78,7 +78,7 @@ class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : mutable.HashMap[St
     case Finalize => {
       boss ! Finished
       context.actorSelection("/user/distributor") ! Finished(Option(sameAsMap))
-      context.stop(self)
+      self ! PoisonPill
     }
     case _ =>
   }

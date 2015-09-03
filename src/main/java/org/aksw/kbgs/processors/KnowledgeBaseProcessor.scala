@@ -1,6 +1,6 @@
 package org.aksw.kbgs.processors
 
-import akka.actor.{Props, Actor, ActorRef}
+import akka.actor.{PoisonPill, Props, Actor, ActorRef}
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.helpers.IdBuffer
 import org.aksw.kbgs.inout.InstanceReader
@@ -55,7 +55,7 @@ class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Act
   {
     Main.config.tempFile.substring(0,
       Main.config.tempFile.lastIndexOf('.')) + "_" + kbPrefix +
-      Main.config.tempFile.substring(Main.config.tempFile.lastIndexOf('.'))
+      Main.config.tempFile.substring(Main.config.tempFile.lastIndexOf('.')) + ".gz"
   }
 
   override def receive: Receive =
@@ -65,7 +65,7 @@ class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Act
     case Finished =>
     {
       finish()
-      context.stop(self)
+      self ! PoisonPill
     }
     case ContractSigned =>
     {

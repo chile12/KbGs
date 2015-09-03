@@ -1,6 +1,6 @@
 package org.aksw.kbgs.processors
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{PoisonPill, Actor, ActorRef}
 import com.google.common.collect.HashMultimap
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.inout.InstanceReader
@@ -58,6 +58,6 @@ class SameAsProcessor(contractor: ActorRef, idBuffer: HashMultimap[String, Strin
   {
     outputWriter ! Finalize
     context.parent ! SameAsFinished()
-    context.stop(self)
+    self ! PoisonPill
   }
 }
