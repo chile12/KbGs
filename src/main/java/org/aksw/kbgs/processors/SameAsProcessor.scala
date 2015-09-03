@@ -17,11 +17,12 @@ import scala.reflect.ClassTag
 class SameAsProcessor(contractor: ActorRef, idBuffer: HashMultimap[String, String], outputWriter: ActorRef) extends Actor with InstanceProcessor[StringBuilder, Unit] {
 
   var filenames: List[String] = null
+  var instanceReader: InstanceReader = null
   //second pass: resolve same as links -> one resource has just one identifier
   override def startProcess(): Unit =
   {
     outputWriter ! WriterStart(Main.config.outFile, outputWriter.path.name, false)
-    val instanceReader = new InstanceReader(filenames)
+    instanceReader = new InstanceReader(filenames)
 //      while (instanceReader.notFinished())
 //        evaluate(instanceReader.readNextSubject()).onSuccess{case s: Unit => action(s)}
     val inits = new InitProcessStruct()
@@ -57,6 +58,8 @@ class SameAsProcessor(contractor: ActorRef, idBuffer: HashMultimap[String, Strin
   override def finish(): Unit =
   {
     outputWriter ! Finalize
+    for(filename <- filenames)
+      scala.sys.process.Process("rm -rf " + filename).!
     context.parent ! SameAsFinished()
     self ! PoisonPill
   }

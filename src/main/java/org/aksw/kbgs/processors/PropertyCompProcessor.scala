@@ -15,16 +15,17 @@ import scala.reflect.ClassTag
  */
 class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends Actor with InstanceProcessor[StringBuilder, Unit]{
   private var inputEmpty = false
+  private var sortedFileName =  Main.config.outFile.substring(0, Main.config.outFile.indexOf(".nq")) + "Sorted.nq"
   override def startProcess(): Unit =
   {
-    var sortedFileName =  Main.config.outFile.substring(0, Main.config.outFile.indexOf(".nq")) + "Sorted.nq"
     System.out.println("before sorting")
     if(SystemUtils.IS_OS_WINDOWS)
        true //TODO merge sort on windows
     else if(SystemUtils.IS_OS_UNIX)
     {
       scala.sys.process.Process("sort --parallel=8 -uo " + sortedFileName + " " + Main.config.outFile).!
-      scala.sys.process.Process("gzip " + sortedFileName).!
+      scala.sys.process.Process("gzip -f " + sortedFileName).!
+      scala.sys.process.Process("rm -rf " + Main.config.outFile).!
       sortedFileName += ".gz"
     }
     System.out.println("sorting done :)")
@@ -53,6 +54,7 @@ class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends
   override def finish(): Unit =
   {
     evalWriter ! Finalize
+    scala.sys.process.Process("rm -rf " + sortedFileName).!
     self ! PoisonPill
   }
 
