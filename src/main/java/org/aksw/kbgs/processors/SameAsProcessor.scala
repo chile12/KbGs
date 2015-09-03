@@ -1,12 +1,13 @@
 package org.aksw.kbgs.processors
 
-import akka.actor.{PoisonPill, Actor, ActorRef}
-import com.google.common.collect.HashMultimap
+import akka.actor.{Actor, ActorRef, PoisonPill, Props}
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.inout.InstanceReader
 import org.aksw.kbgs.workers.SameAsWorker
-import org.aksw.kbgs.{InitProcessStruct, Main}
+import org.aksw.kbgs.{Contractor, InitProcessStruct, Main}
+import org.apache.commons.lang3.SystemUtils
 
+import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.reflect.ClassTag
@@ -14,14 +15,15 @@ import scala.reflect.ClassTag
 /**
  * Created by Chile on 8/25/2015.
  */
-class SameAsProcessor(contractor: ActorRef, idBuffer: HashMultimap[String, String], outputWriter: ActorRef) extends Actor with InstanceProcessor[StringBuilder, Unit] {
+class SameAsProcessor(temUriMap: mutable.HashMap[String, String], outputWriter: ActorRef) extends Actor with InstanceProcessor[StringBuilder, Unit] {
 
   var filenames: List[String] = null
   var instanceReader: InstanceReader = null
+  val contractor = context.actorOf(Props(classOf[Contractor[StringBuilder]]))
   //second pass: resolve same as links -> one resource has just one identifier
   override def startProcess(): Unit =
   {
-    outputWriter ! WriterStart(Main.config.outFile, outputWriter.path.name, false)
+    outputWriter ! WriterStart(Main.config.unsorted, outputWriter.path.name, false)
     instanceReader = new InstanceReader(filenames)
 //      while (instanceReader.notFinished())
 //        evaluate(instanceReader.readNextSubject()).onSuccess{case s: Unit => action(s)}
@@ -30,9 +32,9 @@ class SameAsProcessor(contractor: ActorRef, idBuffer: HashMultimap[String, Strin
     inits.workerCount = 4
     val zz = classOf[SameAsWorker]
     inits.classTag = ClassTag(zz)
-    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](idBuffer, outputWriter)
+    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](outputWriter)
     contractor ! RegisterNewWorkPackage(inits, instanceReader)
-    contractor ! InitializeWorker(null)
+    contractor ! InitializeWorker(Seq(temUriMap))
   }
 
   override def evaluate(input: StringBuilder): Future[Unit] = Future{
@@ -58,8 +60,11 @@ class SameAsProcessor(contractor: ActorRef, idBuffer: HashMultimap[String, Strin
   override def finish(): Unit =
   {
     outputWriter ! Finalize
-    for(filename <- filenames)
-      scala.sys.process.Process("rm -rf " + filename).!
+    if(SystemUtils.IS_OS_WINDOWS)
+      true //TODO delete on windows
+    else if(SystemUtils.IS_OS_UNIX)
+      for(filename <- filenames)
+        scala.sys.process.Process("rm -rf " + filename).!
     context.parent ! SameAsFinished()
     self ! PoisonPill
   }

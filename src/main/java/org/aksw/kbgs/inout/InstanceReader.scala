@@ -27,7 +27,7 @@ class InstanceReader(sourcePaths: List[String]) extends WorkLoader[StringBuilder
   {
     if(source.isEmpty)
       return null
-    if(lastRead.trim.length == 0)
+    if(lastRead.replaceAll("(?m)^[\\s]*#.*$", "").trim.length == 0)
     {
       read()
       return next()

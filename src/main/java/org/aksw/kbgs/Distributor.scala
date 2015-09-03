@@ -23,16 +23,21 @@ class Distributor() extends Actor{
   for(kbSpecs <- Main.config.kbMap)
   {
     val tempWriter = context.actorOf(Props(classOf[WriterActor]), kbSpecs._1 + "temp")
-    val actor = context.actorOf(Props(classOf[KnowledgeBaseProcessor], tempWriter, kbSpecs._1), kbSpecs._1)
+    val actor = if(Main.config.uriProviderKb == kbSpecs._1)
+      context.actorOf(Props(classOf[KnowledgeBaseProcessor], tempWriter, kbSpecs._1, true), kbSpecs._1)
+    else
+      context.actorOf(Props(classOf[KnowledgeBaseProcessor], tempWriter, kbSpecs._1, false), kbSpecs._1)
     kbMap.put(kbSpecs._1, (actor, tempWriter))
   }
   private val sameAsMap = HashMultimap.create[String, String]()
+  private val tempUriMap = new mutable.HashMap[String, String]()
   private val tempfiles = ListBuffer[String]()
-  private val sameAsActor = context.actorOf(Props(classOf[SameAsProcessor],context.actorOf(Props(classOf[Contractor[StringBuilder]])), sameAsMap, outputWriter), "sameas")
+  private val sameAsActor = context.actorOf(Props(classOf[SameAsProcessor], tempUriMap, outputWriter), "sameas")
   private val evalActor = context.actorOf(Props(classOf[PropertyCompProcessor],context.actorOf(Props(classOf[Contractor[StringBuilder]])), evalWriter), "evalWriter")
 
   private def startSameAsResolver(): Unit =
   {
+    normalizeLinks()
     for(actor <- kbMap.values)
     {
       if(actor._2 != null)
@@ -46,23 +51,46 @@ class Distributor() extends Actor{
       Main.logger.severe("sameAs actor was not initialized yet!")
   }
 
-  private def normalizeSameAsLinks() {
+  private def normalizeLinks()= {
     val removeList = ListBuffer[(String, String)]()
-    val entries = sameAsMap.entries().asScala
-    for (i <- entries) {
+    for (i <- sameAsMap.entries().asScala) {
       if (sameAsMap.keySet.contains(i.getValue))
         removeList += ((i.getKey, i.getValue))
     }
     for (entry <- removeList)
       sameAsMap.remove(entry._1, entry._2)
+    removeList.clear()
+    for (i <- sameAsMap.entries().asScala) {
+      var zw = tempUriMap.get(i.getKey)
+      if(zw == None)
+        zw = resolveMissingTempUriEntry(i.getKey)
+      if(zw != None)
+        tempUriMap.put(i.getValue, zw.get)
+      else
+        true
+    }
+  }
+
+  private def resolveMissingTempUriEntry(key: String): Option[String] =
+  {
+    var zw: Option[String] = null
+    val set = sameAsMap.get(key).asScala
+    for (k <- set) {
+      zw = tempUriMap.get(k)
+      if (zw != None)
+        return zw
+    }
+    None
   }
 
   override def receive: Receive =
   {
     case Finished(sam) =>
     {
-      sameAsMap.putAll(sam.get.asInstanceOf[HashMultimap[String, String]])
-      normalizeSameAsLinks()
+      val ret = sam.get.asInstanceOf[(HashMultimap[String, String], HashMultimap[String, String])]
+      sameAsMap.putAll(ret._1)
+      for(ent <- ret._2.entries().asScala)
+        tempUriMap.put(ent.getKey, ent.getValue)
     }
     case StartProcess =>
     {
@@ -75,8 +103,11 @@ class Distributor() extends Actor{
     case WriterClosed(actor, filename) =>
     {
       if(Main.config.propEvalFile == filename)
+      {
+        Main.config.cleanUp()
         context.system.shutdown()
-      if(Main.config.outFile == filename) {
+      }
+      if(Main.config.unsorted == filename) {
         sameAsActor ! PoisonPill
         outputWriter ! PoisonPill
         evalActor ! StartProcess

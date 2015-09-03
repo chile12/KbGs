@@ -23,7 +23,7 @@ class Contractor[W] extends Actor{
   private var client: ActorRef = null
   private val broadCaster = new util.ArrayList[ActorRef]()
   private val finishedList = new util.ArrayList[Future[Any]]()
-  private var finalizedWorkers =0;
+  private var finalizedWorkers =0
 
   def registerNewProcess(intStruct: InitProcessStruct, wLoader: WorkLoader[W]): Unit =
   {

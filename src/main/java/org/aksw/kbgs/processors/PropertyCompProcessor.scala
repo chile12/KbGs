@@ -15,7 +15,6 @@ import scala.reflect.ClassTag
  */
 class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends Actor with InstanceProcessor[StringBuilder, Unit]{
   private var inputEmpty = false
-  private var sortedFileName =  Main.config.outFile.substring(0, Main.config.outFile.indexOf(".nq")) + "Sorted.nq"
   override def startProcess(): Unit =
   {
     System.out.println("before sorting")
@@ -23,10 +22,9 @@ class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends
        true //TODO merge sort on windows
     else if(SystemUtils.IS_OS_UNIX)
     {
-      scala.sys.process.Process("sort --parallel=8 -uo " + sortedFileName + " " + Main.config.outFile).!
-      scala.sys.process.Process("gzip -f " + sortedFileName).!
-      scala.sys.process.Process("rm -rf " + Main.config.outFile).!
-      sortedFileName += ".gz"
+      scala.sys.process.Process("sort --parallel=8 -uo " + Main.config.sorted + " " + Main.config.unsorted).!
+      scala.sys.process.Process("gzip -f " + Main.config.sorted).!
+      scala.sys.process.Process("rm -rf " + Main.config.unsorted).!
     }
     System.out.println("sorting done :)")
 
@@ -35,7 +33,7 @@ class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends
     inits.workerCount = 4
     val zz = classOf[KbComparatWorker]
     inits.classTag = ClassTag(zz)
-    contractor ! RegisterNewWorkPackage(inits, new InstanceReader(List(sortedFileName)))
+    contractor ! RegisterNewWorkPackage(inits, new InstanceReader(List(Main.config.sorted + ".gz")))
     evalWriter ! WriterStart("propProc", self.path.name)
 
     val zw = new Array[ActorRef](1)
@@ -54,7 +52,10 @@ class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends
   override def finish(): Unit =
   {
     evalWriter ! Finalize
-    scala.sys.process.Process("rm -rf " + sortedFileName).!
+    if(SystemUtils.IS_OS_WINDOWS)
+      true //TODO delete on windows
+    else if(SystemUtils.IS_OS_UNIX)
+      scala.sys.process.Process("rm -rf " + Main.config.sorted + ".gz").!
     self ! PoisonPill
   }
 

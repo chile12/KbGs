@@ -40,14 +40,10 @@ class CompResultWriter extends Actor{
     }
     case Finalize =>
     {
-      if(sourceMap.keySet.contains(sender))
-        sourceMap.update(sender, true)
-      if(sourceMap.values.forall((x) => x == true)) {
         val mapper = new ObjectMapper()
         mapper.registerModule(new GuavaModule())
         mapper.writeValue(new File(Main.config.propEvalFile), propResultTable)
         context.parent ! WriterClosed("", Main.config.propEvalFile)
-      }
     }
     case RegistrateNewWriterSource =>
       if(!sourceMap.keySet.contains(sender))

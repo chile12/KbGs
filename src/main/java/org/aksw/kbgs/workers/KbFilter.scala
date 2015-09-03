@@ -10,13 +10,13 @@ import scala.collection.mutable
 /**
  * Created by Chile on 8/27/2015.
  */
-class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : mutable.HashMap[String, mutable.Set[String]]) extends Actor{
+class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : mutable.HashMap[String, mutable.Set[String]], isUriProvider: Boolean = false) extends Actor{
   private val idProperty = Main.config.kbMap.get(kbPrefix).get("idProperty")
   private val graphName = Main.config.kbMap.get(kbPrefix).get("kbGraph")
   private val newUriStump = "<http://aksw.org/kbgs/isbn/%s>"
   private val sameAsMap = HashMultimap.create[String, String]()
+  private val tempUriMap = HashMultimap.create[String, String]()
   private var boss: ActorRef = null
-  private var idBufferActor: ActorRef = null
 
   def doWork(input: StringBuilder): Unit =
   {
@@ -40,6 +40,8 @@ class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : mutable.HashMap[St
           }
         }
         writer ! InsertJoinedSubject(sb)
+        if(isUriProvider)
+          tempUriMap.put(String.format(newUriStump, thisIds(0)), uri)
       }
     }
     boss ! GimmeWork()
@@ -77,7 +79,7 @@ class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : mutable.HashMap[St
     }
     case Finalize => {
       boss ! Finished
-      context.actorSelection("/user/distributor") ! Finished(Option(sameAsMap))
+      context.actorSelection("/user/distributor") ! Finished(Option((sameAsMap, tempUriMap)))
       self ! PoisonPill
     }
     case _ =>

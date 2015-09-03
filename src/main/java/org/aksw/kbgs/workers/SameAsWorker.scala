@@ -1,38 +1,49 @@
 package org.aksw.kbgs.workers
 
-import akka.actor.{PoisonPill, Actor, ActorRef}
-import com.google.common.collect.HashMultimap
+import akka.actor.{Actor, ActorRef, PoisonPill}
 import org.aksw.kbgs.Contractor._
+
+import scala.collection.mutable
 
 
 /**
  * Created by Chile on 8/29/2015.
  */
-class SameAsWorker(idBuffer:HashMultimap[String, String], writer: ActorRef) extends Actor {
+class SameAsWorker(writer: ActorRef) extends Actor {
 
   private var boss: ActorRef = null
+  private var tempUriMap: mutable.HashMap[String, String] =null
 
   def doWork(isb: StringBuilder): Unit =
   {
     val sb = new StringBuilder()
     val firstLine = isb.lines.next()
     val subject = firstLine.substring(0, firstLine.indexOf(">") + 1)
-    val sameAsValues = idBuffer.get(subject)
-    if (sameAsValues.size > 0) {
-      for (line <- isb.lines) {
-        val replaceWith = sameAsValues.iterator().next()
-        sb.append(line.replace(subject, replaceWith))
-      }
-      writer ! InsertJoinedSubject(sb)
+
+    for (line <- isb.lines)
+    {
+      val zw = replaceSubjectUri(line, subject)
+      if( zw != null)
+        sb.append(zw)
     }
-    writer ! InsertJoinedSubject(isb)
+    writer ! InsertJoinedSubject(sb)
     boss ! GimmeWork()
+  }
+
+  private def replaceSubjectUri(line: String, subject: String): String =
+  {
+    val zw = tempUriMap.get(subject)
+    if( zw != None)
+      line.replace(subject, zw.get)
+    else
+      null
   }
 
   override def receive: Receive =
   {
     case InitializeWorker(inits) =>
     {
+      tempUriMap = inits(0).asInstanceOf[mutable.HashMap[String, String]]
       boss = sender()
       writer ! RegistrateNewWriterSource
       boss ! GimmeWork()

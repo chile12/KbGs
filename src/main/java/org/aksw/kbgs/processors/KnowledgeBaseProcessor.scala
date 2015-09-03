@@ -14,7 +14,7 @@ import scala.reflect.ClassTag
 /**
  * Created by Chile on 8/23/2015.
  */
-class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Actor with InstanceProcessor[StringBuilder, String]{
+class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String, isUriProvider: Boolean = false) extends Actor with InstanceProcessor[StringBuilder, String]{
 
   private var finished = false
   private val contractor = context.actorOf(Props(classOf[Contractor[StringBuilder]]))
@@ -30,7 +30,7 @@ class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String) extends Act
     inits.workerCount = 4
     val zz = classOf[KbFilter]
     inits.classTag = ClassTag(zz)
-    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](tempWriter, kbPrefix,idBuffer.getMap())
+    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](tempWriter, kbPrefix,idBuffer.getMap(), isUriProvider)
     contractor ! RegisterNewWorkPackage(inits, instanceReader)
   }
 
