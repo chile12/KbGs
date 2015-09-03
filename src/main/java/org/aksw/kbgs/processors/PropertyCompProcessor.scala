@@ -17,7 +17,7 @@ class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends
   private var inputEmpty = false
   override def startProcess(): Unit =
   {
-    var sortedFileName =  Main.config.outFile.substring(0, Main.config.outFile.indexOf(".nq.gz")) + "Sorted.nq"
+    var sortedFileName =  Main.config.outFile.substring(0, Main.config.outFile.indexOf(".nq")) + "Sorted.nq"
     System.out.println("before sorting")
     if(SystemUtils.IS_OS_WINDOWS)
        true //TODO merge sort on windows
