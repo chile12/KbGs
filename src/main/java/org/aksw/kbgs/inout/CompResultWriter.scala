@@ -1,13 +1,12 @@
 package org.aksw.kbgs.inout
 
 import java.io._
-import java.util
 
 import akka.actor.{Actor, ActorRef}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.guava.GuavaModule
 import com.google.common.collect.HashBasedTable
-import org.aksw.kbgs.Contractor.{RegistrateNewWriterSource, WriterClosed, Finalize, AddCompResult}
+import org.aksw.kbgs.Contractor.{AddCompResult, Finalize, RegistrateNewWriterSource, WriterClosed}
 import org.aksw.kbgs.Main
 
 import scala.collection.mutable
@@ -17,7 +16,7 @@ import scala.collection.mutable
  */
 class CompResultWriter extends Actor{
 
-  val propResultTable = new util.HashMap[String, Array[java.lang.Float]]()
+  val propResultTable = new mutable.HashMap[String, Array[java.lang.Float]]()
   val propResultMap = HashBasedTable.create[String, String, mutable.HashMap[String, (Float, Int)]]()
   var sourceMap = new mutable.HashMap[ActorRef, Boolean]()
 
@@ -26,17 +25,22 @@ class CompResultWriter extends Actor{
     case AddCompResult(kb1: String, kb2: String, property: String, result: (Option[Float], Int)) =>
     {
       var value = propResultTable.get(kb1 + "," + kb2 + "," + property)
-      if(value == null)
-        value = propResultTable.get(kb2 + "," + kb1 + "," + property)
-      if(value == null)
-      {
-        propResultTable.put(kb1 + "," + kb2 + "," + property, Array(0f, 0f))
-        value = propResultTable.get(kb1 + "," + kb2 + "," + property)
+      value match {
+        case None => {
+          value = propResultTable.get(kb2 + "," + kb1 + "," + property)
+          value match {
+            case None =>{
+              propResultTable.put(kb1 + "," + kb2 + "," + property, Array(0f, 0f))
+              value = propResultTable.get(kb1 + "," + kb2 + "," + property)
+            }
+          }
+        }
       }
 
-      if(result._1 != None)
-        value(0) = value(0) + result._1.get
-      value(1) = value(1) + 1f
+      val v = value.get
+
+      v(0) = v(0) + result._1.getOrElse(0f)
+      v(1) = v(1) + 1f
     }
     case Finalize =>
     {

@@ -13,6 +13,7 @@ class SameAsWorker(writer: ActorRef) extends Actor {
 
   private var boss: ActorRef = null
   private var tempUriMap: mutable.HashMap[String, String] =null
+  private val newUriStump = "<http://aksw.org/kbgs/id"
 
   def doWork(isb: StringBuilder): Unit =
   {
@@ -22,21 +23,33 @@ class SameAsWorker(writer: ActorRef) extends Actor {
 
     for (line <- isb.lines)
     {
-      val zw = replaceSubjectUri(line, subject)
-      if( zw != null)
-        sb.append(zw)
+      replaceSubjectUri(line, subject) match {
+        case Some(zw) => sb.append(zw)
+      }
     }
     writer ! InsertJoinedSubject(sb)
     boss ! GimmeWork()
   }
 
-  private def replaceSubjectUri(line: String, subject: String): String =
+  private def replaceSubjectUri(line: String, subject: String): Option[String] =
   {
-    val zw = tempUriMap.get(subject)
-    if( zw != None)
-      line.replace(subject, zw.get)
-    else
-      null
+    var zw = tempUriMap.get(subject)
+    var l = line
+    zw match {
+      case Some(x) => {
+        l = line.replace(subject, zw.get)
+        if(l.contains(newUriStump))
+        {
+          val ind = l.indexOf(newUriStump)
+          val uri = l.substring(ind, l.indexOf('>', ind)+1)
+          zw = tempUriMap.get(uri)
+          if( zw != None)
+            l = line.replace(uri, zw.get)
+        }
+        return Option(l)
+      }
+    }
+    None
   }
 
   override def receive: Receive =
@@ -50,8 +63,8 @@ class SameAsWorker(writer: ActorRef) extends Actor {
     }
     case Work(work) =>
     {
-      val zw = work.asInstanceOf[StringBuilder]
-      doWork(zw)
+      val zw = work.asInstanceOf[Option[StringBuilder]]
+      zw.map(doWork(_))
     }
     case Finalize => {
       boss ! Finished

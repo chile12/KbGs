@@ -1,12 +1,13 @@
 package org.aksw.kbgs.processors
 
-import akka.actor.{PoisonPill, Props, Actor, ActorRef}
+import akka.actor.{Actor, PoisonPill, Props}
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.helpers.IdBuffer
-import org.aksw.kbgs.inout.InstanceReader
+import org.aksw.kbgs.inout.{InstanceReader, WriterActor}
 import org.aksw.kbgs.workers.KbFilter
 import org.aksw.kbgs.{Contractor, InitProcessStruct, Main}
 
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.reflect.ClassTag
@@ -14,24 +15,26 @@ import scala.reflect.ClassTag
 /**
  * Created by Chile on 8/23/2015.
  */
-class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String, isUriProvider: Boolean = false) extends Actor with InstanceProcessor[StringBuilder, String]{
+class KnowledgeBaseProcessor(kbPrefix: String, propertyMap: collection.mutable.HashMap[String, String], isUriProvider: Boolean = false) extends Actor with InstanceProcessor[StringBuilder, String]{
 
-  private var finished = false
   private val contractor = context.actorOf(Props(classOf[Contractor[StringBuilder]]))
   private val idBuffer = new IdBuffer(Main.config.kbMap.get(kbPrefix).get("idFile"), -1)
+  private val tempWriter = context.actorOf(Props(classOf[WriterActor]), kbPrefix + "temp")
 
   //first pass: evaluate all instances from sorted source file
   override def startProcess(): Unit =
   {
-    tempWriter ! WriterStart(getTempWriterName, self.path.name)
+    tempWriter ! WriterStart(getTempWriterName, kbPrefix)
     val instanceReader = new InstanceReader(List(Main.config.kbMap.get(kbPrefix).get("kbInput")))
     val inits = new InitProcessStruct()
     inits.broadcastId = "compareKb"
     inits.workerCount = 4
     val zz = classOf[KbFilter]
     inits.classTag = ClassTag(zz)
-    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](tempWriter, kbPrefix,idBuffer.getMap(), isUriProvider)
+    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](tempWriter, kbPrefix, idBuffer.getMap(), propertyMap, isUriProvider)
     contractor ! RegisterNewWorkPackage(inits, instanceReader)
+    contractor ! InitializeWorker(null)
+
   }
 
   override def evaluate(input: StringBuilder): Future[String] =
@@ -48,7 +51,14 @@ class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String, isUriProvid
   override def finish(): Unit =
   {
     tempWriter ! Finalize
-    finished = true
+    context.parent ! ProcessorFinished(kbPrefix)
+  }
+
+  private def getProperyList()=
+  {
+    val propList = new ListBuffer[String]()
+    for(p <- Main.config.properties)
+      p._2.get(kbPrefix).map(x => propList += x)
   }
 
   private def getTempWriterName(): String =
@@ -70,7 +80,6 @@ class KnowledgeBaseProcessor(tempWriter: ActorRef, kbPrefix: String, isUriProvid
     case ContractSigned =>
     {
       System.out.println("contract signed")
-      contractor ! InitializeWorker(null)
     }
     case _ =>
   }

@@ -1,10 +1,10 @@
 package org.aksw.kbgs.processors
 
-import akka.actor.{PoisonPill, Actor, ActorRef}
+import akka.actor.{Actor, ActorRef, PoisonPill, Props}
 import org.aksw.kbgs.Contractor._
-import org.aksw.kbgs.inout.InstanceReader
+import org.aksw.kbgs.inout.{CompResultWriter, InstanceReader}
 import org.aksw.kbgs.workers.KbComparatWorker
-import org.aksw.kbgs.{InitProcessStruct, Main}
+import org.aksw.kbgs.{Contractor, InitProcessStruct, Main}
 import org.apache.commons.lang3.SystemUtils
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -13,8 +13,10 @@ import scala.reflect.ClassTag
 /**
  * Created by Chile on 8/26/2015.
  */
-class PropertyCompProcessor(contractor: ActorRef, evalWriter: ActorRef)  extends Actor with InstanceProcessor[StringBuilder, Unit]{
+class PropertyCompProcessor()  extends Actor with InstanceProcessor[StringBuilder, Unit]{
   private var inputEmpty = false
+  private val contractor = context.actorOf(Props(classOf[Contractor[StringBuilder]]))
+  private val evalWriter = context.actorOf(Props(classOf[CompResultWriter]), "evalWriter")
   override def startProcess(): Unit =
   {
     System.out.println("before sorting")

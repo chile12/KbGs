@@ -49,10 +49,9 @@ class Contractor[W] extends Actor{
     }
     case GimmeWork() => {
       val zw = wLoader.next()
-      if( zw != null && zw != None)
-        sender ! Work(zw)
-      else {
-        sender ! Finalize
+      zw match {
+        case Some(x) => sender ! Work(zw)
+        case None => sender ! Finalize
       }
     }
     case InitializeWorker(inits) => {
@@ -98,7 +97,8 @@ object Contractor{
   case class WriterClosed(actor: String, fileName: String)
   case class WriterStart(fileName: String, actor: String, gzip: Boolean = true)
   case class SameAsFinished()
-  case class FinishProcessor()
+  case class ProcessorFinished(kbPrefix: String)
+  case class UriPathsResolved(kbPrefix: String, fileName: String)
   case class NewWriter()
   case class NewWriterResponse(writer: ActorRef)
   case class StartSameAsActor(filenames: List[String])

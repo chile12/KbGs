@@ -1,8 +1,8 @@
 package org.aksw.kbgs.processors
 
-import akka.actor.{Actor, ActorRef, PoisonPill, Props}
+import akka.actor.{Actor, PoisonPill, Props}
 import org.aksw.kbgs.Contractor._
-import org.aksw.kbgs.inout.InstanceReader
+import org.aksw.kbgs.inout.{InstanceReader, WriterActor}
 import org.aksw.kbgs.workers.SameAsWorker
 import org.aksw.kbgs.{Contractor, InitProcessStruct, Main}
 import org.apache.commons.lang3.SystemUtils
@@ -15,18 +15,17 @@ import scala.reflect.ClassTag
 /**
  * Created by Chile on 8/25/2015.
  */
-class SameAsProcessor(temUriMap: mutable.HashMap[String, String], outputWriter: ActorRef) extends Actor with InstanceProcessor[StringBuilder, Unit] {
+class SameAsProcessor(tempUriMap: mutable.HashMap[String, String]) extends Actor with InstanceProcessor[StringBuilder, Unit] {
 
-  var filenames: List[String] = null
-  var instanceReader: InstanceReader = null
-  val contractor = context.actorOf(Props(classOf[Contractor[StringBuilder]]))
-  //second pass: resolve same as links -> one resource has just one identifier
+  private var filenames: List[String] = null
+  private var instanceReader: InstanceReader = null
+  private val contractor = context.actorOf(Props(classOf[Contractor[StringBuilder]]))
+  private val outputWriter = context.actorOf(Props(classOf[WriterActor]), "outputWriter")
+
   override def startProcess(): Unit =
   {
     outputWriter ! WriterStart(Main.config.unsorted, outputWriter.path.name, false)
     instanceReader = new InstanceReader(filenames)
-//      while (instanceReader.notFinished())
-//        evaluate(instanceReader.readNextSubject()).onSuccess{case s: Unit => action(s)}
     val inits = new InitProcessStruct()
     inits.broadcastId = "compareKb"
     inits.workerCount = 4
@@ -34,7 +33,7 @@ class SameAsProcessor(temUriMap: mutable.HashMap[String, String], outputWriter: 
     inits.classTag = ClassTag(zz)
     inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](outputWriter)
     contractor ! RegisterNewWorkPackage(inits, instanceReader)
-    contractor ! InitializeWorker(Seq(temUriMap))
+    contractor ! InitializeWorker(Seq(tempUriMap))
   }
 
   override def evaluate(input: StringBuilder): Future[Unit] = Future{

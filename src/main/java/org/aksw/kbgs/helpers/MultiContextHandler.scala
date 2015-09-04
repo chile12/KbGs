@@ -13,11 +13,7 @@ class MultiContextHandler(modelMap: HashMap[String, Model]) extends RDFHandler{
 
   override def handleStatement(st: Statement): Unit = {
     val context = st.getContext
-    val m = modelMap.get(context.stringValue())
-    if(m != None)
-      m.get.add(st)
-    else
-      System.out.print(st.toString)
+    modelMap.get(context.stringValue()).map(_.add(st))
   }
 
   override def startRDF(): Unit =

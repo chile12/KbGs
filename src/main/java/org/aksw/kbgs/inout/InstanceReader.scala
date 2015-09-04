@@ -13,6 +13,7 @@ import org.openrdf.rio.RDFParseException
 class InstanceReader(sourcePaths: List[String]) extends WorkLoader[StringBuilder]{
 
   private var source = new util.ArrayList[Iterator[String]]()
+  private var offset =0
   for(s <- sourcePaths)
   {
     val zw = Main.getSource(s).getLines()
@@ -21,15 +22,15 @@ class InstanceReader(sourcePaths: List[String]) extends WorkLoader[StringBuilder
   }
   private var lastRead: String = null
   private var finished = false
-  read()  //get first line
+  readIntern()  //get first line
 
-  override def next(): StringBuilder =
+  override def next(): Option[StringBuilder] =
   {
     if(source.isEmpty)
-      return null
+      return None
     if(lastRead.replaceAll("(?m)^[\\s]*#.*$", "").trim.length == 0)
     {
-      read()
+      readIntern()
       return next()
     }
     val sb = new StringBuilder()
@@ -37,12 +38,13 @@ class InstanceReader(sourcePaths: List[String]) extends WorkLoader[StringBuilder
     if(subject == "")
       throw new RDFParseException("source file " + sourcePaths + " is not in a valid nt-rdf serialization!")
     sb.append(lastRead)
-    while (read().startsWith(subject)) {
+    while (readIntern().startsWith(subject)) {
       sb.append(lastRead)
     }
-    sb
+    Option(sb)
   }
-  private def read(): String =
+
+  private def readIntern(): String =
   {
     if(source.size() > 0) {
       while (source.get(0).isEmpty) {
@@ -53,11 +55,45 @@ class InstanceReader(sourcePaths: List[String]) extends WorkLoader[StringBuilder
         return ""
       }
       if (source.get(0).hasNext)
+      {
         lastRead = source.get(0).next().trim + "\n"
+        offset = 0
+      }
       return lastRead
     }
     ""
   }
 
+
   override def hasNext: Boolean = !finished
+
+  override def close(): Unit =
+  {
+  }
+
+  override def read(cbuf: Array[Char], off: Int, len: Int): Int =
+  {
+    for(i <- 0 until len)
+    {
+      getNectChar() match {
+        case Some(x) => cbuf.update(i + off, x)
+        case None => return i
+      }
+    }
+    len
+  }
+
+  private def getNectChar(): Option[Char] =
+  {
+    offset += 1
+    if(lastRead.length >= offset)
+      return Option(lastRead(offset-1))
+    else
+    {
+      readIntern()
+      if(lastRead.length >= offset)
+        return Option(lastRead(offset-1))
+      None
+    }
+  }
 }

@@ -1,65 +1,87 @@
 package org.aksw.kbgs.workers
 
-import akka.actor.{PoisonPill, Actor, ActorRef}
+import akka.actor.{Actor, ActorRef, PoisonPill}
 import com.google.common.collect.HashMultimap
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.Main
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**
  * Created by Chile on 8/27/2015.
  */
-class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : mutable.HashMap[String, mutable.Set[String]], isUriProvider: Boolean = false) extends Actor{
+class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : HashMultimap[String, String], propertyMap: mutable.HashMap[String, String], isUriProvider: Boolean = false) extends Actor{
   private val idProperty = Main.config.kbMap.get(kbPrefix).get("idProperty")
   private val graphName = Main.config.kbMap.get(kbPrefix).get("kbGraph")
-  private val newUriStump = "<http://aksw.org/kbgs/isbn/%s>"
+  private val newUriStump = "<http://aksw.org/kbgs/id/%s>"
   private val sameAsMap = HashMultimap.create[String, String]()
   private val tempUriMap = HashMultimap.create[String, String]()
+  private val objectIsUri = HashMultimap.create[String, String]()
   private var boss: ActorRef = null
 
   def doWork(input: StringBuilder): Unit =
   {
     val sb = new StringBuilder()
-    val lines = input.lines
     val isbnIdx = input.lines.indexWhere(x => x.contains(idProperty))
     if (isbnIdx >= 0) {
       val l = input.lines.toList(isbnIdx)
-      val uri = getSubject(l)
-      if (uri != null) {
-        var thisIds = idBuffer.get(uri).get.toList
-        val sameAs = String.format(newUriStump, thisIds(0)) + "\t<http://www.w3.org/2002/07/owl#sameAs>\t" + uri + "\t<" + graphName + "> .\n"
-        sb.append(sameAs)
-        for (line <- input.lines) {
-          sb.append(getNewLine(line, uri, thisIds(0)))
-        }
-        if (thisIds.size > 1) {
-          for (i <- 1 until thisIds.size) {
-            sb.append(String.format(newUriStump, thisIds(0)) + "\t<http://www.w3.org/2002/07/owl#sameAs>\t" + String.format(newUriStump, thisIds(i)) + "\t<" + graphName + "> .\n")
-            sameAsMap.put(String.format(newUriStump, thisIds(i)), String.format(newUriStump, thisIds(0)))
+      val uri = l.substring(0, l.indexOf('>')+1)
+      getVals(l, uri) match {
+        case Some(thisIds) => {
+          val sameAs = String.format(newUriStump, thisIds(0)) + "\t<http://www.w3.org/2002/07/owl#sameAs>\t" + uri + "\t<" + graphName + "> .\n"
+          sb.append(sameAs)
+          for (line <- input.lines) {
+            if(hasPredicat(line)) {
+              sb.append(getNewLine(line, uri, thisIds(0)))
+            }
           }
+          if (thisIds.size > 1) {
+            for (i <- 1 until thisIds.size) {
+              sb.append(String.format(newUriStump, thisIds(0)) + "\t<http://www.w3.org/2002/07/owl#sameAs>\t" + String.format(newUriStump, thisIds(i)) + "\t<" + graphName + "> .\n")
+              sameAsMap.put(String.format(newUriStump, thisIds(i)), String.format(newUriStump, thisIds(0)))
+            }
+          }
+          writer ! InsertJoinedSubject(sb)
+          if (isUriProvider)
+            tempUriMap.put(String.format(newUriStump, thisIds(0)), uri)
         }
-        writer ! InsertJoinedSubject(sb)
-        if(isUriProvider)
-          tempUriMap.put(String.format(newUriStump, thisIds(0)), uri)
+        case None =>
       }
     }
     boss ! GimmeWork()
   }
 
-  private def getSubject(line: String): String=
+  private def getVals(line: String, subject: String): Option[List[String]] =
   {
-    val subject = line.substring(0, line.indexOf('>')+1)
+
     if(idBuffer.keySet.contains(subject))
-      return subject
-    null
+      return Option(idBuffer.get(subject).asScala.toList)
+    None
+  }
+
+  private def hasPredicat(line: String): Boolean =
+  {
+    val startInd = line.indexOf('>')+1
+    val pred = line.substring(startInd, line.indexOf('>', startInd)+1).trim
+    propertyMap.get(pred) match {
+      case Some(x) => true
+      case None => false
+    }
   }
 
   private def getNewLine(line:String, uri:String, id:String): String =
   {
     val zw = line.replace(uri, String.format(newUriStump, id))
-    val idx = Math.max(zw.lastIndexOf('>'), zw.lastIndexOf('"'))
-    zw.substring(0, idx+1) + "\t<" + graphName + "> .\n"
+    val idx = zw.lastIndexOf('.')
+    val triple = zw.substring(0, idx)
+    if(!(triple.contains("^^") || triple.contains("\"@") || triple.lastIndexOf('>') < triple.lastIndexOf('"'))) //not!,  object is uri
+    {
+      val startInd = line.indexOf('>')+1
+      val pred = line.substring(startInd, line.indexOf('>', startInd)+1).trim
+      objectIsUri.put(triple.substring(triple.lastIndexOf('<'), triple.lastIndexOf('>')+1), pred)
+    }
+    triple + "\t<" + graphName + "> .\n"
   }
 
   override def receive: Receive = {
@@ -70,8 +92,8 @@ class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : mutable.HashMap[St
     }
     case Work(work) =>
     {
-      val zw = work.asInstanceOf[StringBuilder]
-      doWork(zw)
+      val zw = work.asInstanceOf[Option[StringBuilder]]
+      zw.map(doWork(_))
     }
     case AssignWorkers(b) =>
     {
@@ -79,7 +101,7 @@ class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : mutable.HashMap[St
     }
     case Finalize => {
       boss ! Finished
-      context.actorSelection("/user/distributor") ! Finished(Option((sameAsMap, tempUriMap)))
+      context.actorSelection("/user/distributor") ! Finished(Option((kbPrefix, (sameAsMap, tempUriMap, objectIsUri))))
       self ! PoisonPill
     }
     case _ =>

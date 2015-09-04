@@ -7,6 +7,7 @@ import com.google.common.collect.HashBasedTable
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.Main
 import org.aksw.kbgs.helpers.MultiContextHandler
+import org.apache.commons.lang3.StringUtils
 import org.openrdf.model.impl.{TreeModel, URIImpl}
 import org.openrdf.model.{Model, Value}
 import org.openrdf.query.algebra.evaluation.util.ValueComparator
@@ -51,20 +52,24 @@ class KbComparatWorker() extends Actor{
         if(i < j) {  //to make sure we dont compare the same Kb or the same Kbs twice
           val valueMap = new HashMap[String, Option[Float]]()
           for (prop <- Main.config.properties) {
-            val uri1 = prop._2.get(kb1)
-            val uri2 = prop._2.get(kb2)
-            if(uri1 != None && uri1.get.length > 3 && uri2 != None && uri2.get.length > 3) {
-              val valSelector1 = modelMap.get(graph1).get.filter(null, new URIImpl(uri1.get), null).objects()
-              val valSelector2 = modelMap.get(graph2).get.filter(null, new URIImpl(uri2.get), null).objects()
-              var result =0
-              for(val1 <-valSelector1.toArray(new Array[Value](valSelector1.size())))
-                for(val2 <-valSelector2.toArray(new Array[Value](valSelector2.size())))
-                  if(comparator.compare(val1, val2) == 0)
-                    result = 1
+            val uri1 = prop._2.get(kb1).map(new URIImpl(_))
+            val uri2 = prop._2.get(kb2).map(new URIImpl(_))
+            val valSelector1 = modelMap.get(graph1).get.filter(null, uri1.getOrElse(null), null).objects()
+            val valSelector2 = modelMap.get(graph2).get.filter(null, uri2.getOrElse(null), null).objects()
+            var result =0f
+            for(val1 <-valSelector1.toArray(new Array[Value](valSelector1.size())))
+              for(val2 <-valSelector2.toArray(new Array[Value](valSelector2.size())))
+              {
+                val dist = StringUtils.getLevenshteinDistance(val1.stringValue(), val2.stringValue())
+                //edit distance with cut of at 50%
+                result = 1f - (dist.asInstanceOf[Float] / Math.max(val1.stringValue().length, val2.stringValue().length))
+                if(result < 0.5f)
+                  result = 0f
+              }
               valueMap.put(prop._1, Option(result))
-            }
-            else
-              valueMap.put(prop._1 + " not used", None)
+
+//            else
+//              valueMap.put(prop._1 + " not used", None)
           }
           compTable.put(kb1, kb2, valueMap)
         }
@@ -103,12 +108,7 @@ class KbComparatWorker() extends Actor{
     if(valueMap == null)
       valueMap = compTable.get(kb2, kb1)
     if(property != null) {
-      val prop = valueMap.get(property)
-      //TODO Option[Float]!!
-      if (prop != None)
-        return (prop.get, 1)
-      else
-        return (None, 1)
+      valueMap.get(property).map(x => return (x, 1))
     }
 
     evalPropTable(valueMap)
@@ -120,7 +120,7 @@ class KbComparatWorker() extends Actor{
     var hit = 0f
     for (prop <- compTable)
     {
-      val zw = if(prop._2 != None) prop._2.get else 0
+      val zw = prop._2.getOrElse(0f)
       hit += zw
       all += 1
     }
@@ -138,8 +138,8 @@ class KbComparatWorker() extends Actor{
     }
     case Work(work) =>
     {
-      val zw = work.asInstanceOf[StringBuilder]
-      sendResults(zw.toString())
+      val zw = work.asInstanceOf[Option[StringBuilder]]
+      zw.map(x => sendResults(x.toString()))
     }
     case Finalize =>
     {
