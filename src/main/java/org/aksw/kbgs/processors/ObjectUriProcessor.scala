@@ -6,43 +6,38 @@ import org.aksw.kbgs.inout.{InstanceReader, WriterActor}
 import org.aksw.kbgs.workers.ObjectUriResolver
 import org.aksw.kbgs.{Contractor, InitProcessStruct, Main}
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 
 /**
  * Created by Chile on 9/4/2015.
  */
-class ObjectUriProcessor(kbPrefix: String, filenames: List[String], valueMap: collection.mutable.HashMap[String, String])  extends Actor with InstanceProcessor[StringBuilder, String]{
+class ObjectUriProcessor(fileNames: List[String], valueMap: collection.mutable.HashMap[String, String])  extends Actor with InstanceProcessor[StringBuilder, String]{
 
   private val contractor = context.actorOf(Props(classOf[Contractor[StringBuilder]]))
-  private val tempWriter = context.actorOf(Props(classOf[WriterActor]), kbPrefix + "temp2")
+  private val tempWriter = context.actorOf(Props(classOf[WriterActor]), "temp2")
 
   override def startProcess(): Unit =
   {
-    tempWriter ! WriterStart(getTempWriterName, kbPrefix)
-    val instanceReader = new InstanceReader(List(Main.config.kbMap.get(kbPrefix).get("kbInput")))
+    tempWriter ! WriterStart(Main.config.tempFile)
+    val instanceReader = new InstanceReader(fileNames)
     val inits = new InitProcessStruct()
     inits.broadcastId = "resolve"
-    inits.workerCount = 4
+    inits.workerCount = Main.config.numberOfThreads
     val zz = classOf[ObjectUriResolver]
     inits.classTag = ClassTag(zz)
-    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](kbPrefix, tempWriter, valueMap)
+    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](tempWriter, valueMap)
     contractor ! RegisterNewWorkPackage(inits, instanceReader)
     contractor ! InitializeWorker(null)
+    System.out.println("initialize ObjectUriResolver workers")
   }
 
-  private def getTempWriterName(): String =
-  {
-    Main.config.tempFile.substring(0,
-      Main.config.tempFile.lastIndexOf('.')) + "_2" + kbPrefix +
-      Main.config.tempFile.substring(Main.config.tempFile.lastIndexOf('.')) + ".gz"
-  }
+  override def action(evalResult: String): Unit = {}
 
-  override def action(evalResult: String): Unit = ???
+  override def finish(): Unit = {}
 
-  override def finish(): Unit = ???
-
-  override def evaluate(input: StringBuilder): Future[String] = ???
+  override def evaluate(input: StringBuilder): Future[String] = {Future{null}}
 
 
   override def receive: Receive =
@@ -51,9 +46,11 @@ class ObjectUriProcessor(kbPrefix: String, filenames: List[String], valueMap: co
       startProcess()
     case Finished =>
     {
-      finish()
       tempWriter ! Finalize
-      context.parent ! UriPathsResolved(kbPrefix, getTempWriterName)
+    }
+    case WriterClosed(filename) =>
+    {
+      context.parent ! UriPathsResolved(Main.config.tempFile)
       self ! PoisonPill
     }
     case _ =>

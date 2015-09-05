@@ -24,16 +24,17 @@ class SameAsProcessor(tempUriMap: mutable.HashMap[String, String]) extends Actor
 
   override def startProcess(): Unit =
   {
-    outputWriter ! WriterStart(Main.config.unsorted, outputWriter.path.name, false)
+    outputWriter ! WriterStart(Main.config.unsorted, false)
     instanceReader = new InstanceReader(filenames)
     val inits = new InitProcessStruct()
     inits.broadcastId = "compareKb"
-    inits.workerCount = 4
+    inits.workerCount = Main.config.numberOfThreads
     val zz = classOf[SameAsWorker]
     inits.classTag = ClassTag(zz)
     inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](outputWriter)
     contractor ! RegisterNewWorkPackage(inits, instanceReader)
     contractor ! InitializeWorker(Seq(tempUriMap))
+    System.out.println("initialize SameAsWorker workers")
   }
 
   override def evaluate(input: StringBuilder): Future[Unit] = Future{
@@ -41,9 +42,10 @@ class SameAsProcessor(tempUriMap: mutable.HashMap[String, String]) extends Actor
   }
 
   override def action(evalResult: Unit): Unit =
-  {
+  {  }
 
-  }
+  override def finish(): Unit =
+  {  }
 
   override def receive: Receive =
   {
@@ -52,19 +54,18 @@ class SameAsProcessor(tempUriMap: mutable.HashMap[String, String]) extends Actor
       startProcess()
     }
     case Finished =>
-      finish()
+      outputWriter ! Finalize
+    case WriterClosed(filename) =>
+    {
+      if(SystemUtils.IS_OS_WINDOWS)
+        true //TODO delete on windows
+      else if(SystemUtils.IS_OS_UNIX)
+        for(filename <- filenames)
+          scala.sys.process.Process("rm -rf " + filename).!
+      context.parent ! SameAsFinished()
+      self ! PoisonPill
+    }
     case _ =>
   }
 
-  override def finish(): Unit =
-  {
-    outputWriter ! Finalize
-    if(SystemUtils.IS_OS_WINDOWS)
-      true //TODO delete on windows
-    else if(SystemUtils.IS_OS_UNIX)
-      for(filename <- filenames)
-        scala.sys.process.Process("rm -rf " + filename).!
-    context.parent ! SameAsFinished()
-    self ! PoisonPill
-  }
 }

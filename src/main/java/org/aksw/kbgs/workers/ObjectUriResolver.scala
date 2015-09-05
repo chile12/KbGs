@@ -3,41 +3,60 @@ package org.aksw.kbgs.workers
 import akka.actor.{Actor, ActorRef, PoisonPill}
 import com.google.common.collect.HashMultimap
 import org.aksw.kbgs.Contractor._
+import org.aksw.kbgs.helpers.NQuadStatement
+import org.apache.commons.io.input.CharSequenceReader
+import org.openrdf.model.{Statement, URI}
+import org.openrdf.rio.RDFHandler
+import org.openrdf.rio.nquads.NQuadsParser
 
 import scala.collection.mutable
 
 /**
  * Created by Chile on 9/4/2015.
  */
-class ObjectUriResolver(kbPrefix: String, writer: ActorRef, valueMap: mutable.HashMap[String, String]) extends Actor{
+class ObjectUriResolver(writer: ActorRef, valueMap: mutable.HashMap[String, String]) extends Actor with RDFHandler{
   private val objectIsUri = HashMultimap.create[String, String]()
   private var boss: ActorRef = null
+  private val parser = new NQuadsParser()
+  parser.setRDFHandler(this)
+  private var sb: StringBuilder = null
 
   def doWork(input: StringBuilder): Unit =
   {
-    val sb = new StringBuilder()
-    for (line <- input.lines) {
-        sb.append(resolveObjUri(line))
-    }
-    writer ! InsertJoinedSubject(sb)
-    boss ! GimmeWork()
+    parser.parse(new CharSequenceReader(input), "")
   }
 
-  private def resolveObjUri(line:String): String =
+  override def startRDF(): Unit =
   {
-    val idx = line.lastIndexOf('<')
-    val graphName = line.substring(idx).trim
-    val triple = line.substring(0, idx-1).trim
-    if(!(triple.contains("^^") || triple.contains("\"@") || triple.lastIndexOf('>') < triple.lastIndexOf('"'))) //not!,  object is uri
+    sb = new StringBuilder()
+  }
+
+  override def handleStatement(statement: Statement): Unit =
+  {
+    if(statement.getObject.isInstanceOf[URI]) //not!,  object is uri
     {
-      val startInd = line.lastIndexOf('<')
-      val obj = line.substring(startInd).trim
-      valueMap.get((obj)) match{
-        case Some(value) => return triple.replace(obj, value) + "\t<" + graphName + "> .\n"
+      valueMap.get("<" + statement.getObject.stringValue() + ">") match{
+        case Some(v) =>
+        {
+          val newSt = new NQuadStatement(statement.getSubject.stringValue(), statement.getPredicate.stringValue(), v, statement.getContext.stringValue())
+          sb.append(NQuadStatement.statementToNQuadString(newSt))
+          return
+        }
         case None =>
       }
     }
-    triple + "\t<" + graphName + "> .\n"
+    val test = NQuadStatement.statementToNQuadString(statement)
+    sb.append(NQuadStatement.statementToNQuadString(statement))
+  }
+
+  override def handleComment(s: String): Unit = {}
+
+  override def handleNamespace(space: String, prefix: String): Unit = {}
+
+  override def endRDF(): Unit =
+  {
+    writer ! InsertJoinedSubject(sb)
+    boss ! GimmeWork()
   }
 
   override def receive: Receive = {
@@ -56,8 +75,7 @@ class ObjectUriResolver(kbPrefix: String, writer: ActorRef, valueMap: mutable.Ha
       boss = b
     }
     case Finalize => {
-      boss ! Finished
-      context.actorSelection("/user/distributor") ! Finished(Option((kbPrefix, (None, None, objectIsUri))))
+      boss ! Finished(None)//Option(("", (None, None, Option(objectIsUri)))))
       self ! PoisonPill
     }
     case _ =>

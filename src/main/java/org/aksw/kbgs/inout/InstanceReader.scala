@@ -18,7 +18,7 @@ class InstanceReader(sourcePaths: List[String]) extends WorkLoader[StringBuilder
   {
     val zw = Main.getSource(s).getLines()
     source.add(zw)
-
+    System.out.println("reading file: " + s)
   }
   private var lastRead: String = null
   private var finished = false
@@ -49,10 +49,11 @@ class InstanceReader(sourcePaths: List[String]) extends WorkLoader[StringBuilder
     if(source.size() > 0) {
       while (source.get(0).isEmpty) {
         source.remove(0)
-        if (source.size() == 0)
+        if (source.size() == 0) {
           finished = true
-        lastRead = ""
-        return ""
+          lastRead = ""
+          return ""
+        }
       }
       if (source.get(0).hasNext)
       {

@@ -14,7 +14,6 @@ import scala.reflect.ClassTag
  * Created by Chile on 8/26/2015.
  */
 class PropertyCompProcessor()  extends Actor with InstanceProcessor[StringBuilder, Unit]{
-  private var inputEmpty = false
   private val contractor = context.actorOf(Props(classOf[Contractor[StringBuilder]]))
   private val evalWriter = context.actorOf(Props(classOf[CompResultWriter]), "evalWriter")
   override def startProcess(): Unit =
@@ -32,15 +31,15 @@ class PropertyCompProcessor()  extends Actor with InstanceProcessor[StringBuilde
 
     val inits = new InitProcessStruct()
     inits.broadcastId = "compareKb"
-    inits.workerCount = 4
+    inits.workerCount = Main.config.numberOfThreads
     val zz = classOf[KbComparatWorker]
     inits.classTag = ClassTag(zz)
     contractor ! RegisterNewWorkPackage(inits, new InstanceReader(List(Main.config.sorted + ".gz")))
-    evalWriter ! WriterStart("propProc", self.path.name)
 
     val zw = new Array[ActorRef](1)
     zw.update(0, evalWriter)
     contractor ! InitializeWorker(zw)
+    System.out.println("initialize KbComparatWorker workers")
   }
 
   override def evaluate(input: StringBuilder): Future[Unit] = Future
@@ -53,12 +52,6 @@ class PropertyCompProcessor()  extends Actor with InstanceProcessor[StringBuilde
 
   override def finish(): Unit =
   {
-    evalWriter ! Finalize
-    if(SystemUtils.IS_OS_WINDOWS)
-      true //TODO delete on windows
-    else if(SystemUtils.IS_OS_UNIX)
-      scala.sys.process.Process("rm -rf " + Main.config.sorted + ".gz").!
-    self ! PoisonPill
   }
 
   override def receive: Receive =
@@ -66,7 +59,17 @@ class PropertyCompProcessor()  extends Actor with InstanceProcessor[StringBuilde
     case StartProcess =>
       startProcess
     case Finished =>
-      finish()
+      evalWriter ! Finalize
+    case WriterClosed(filename) =>
+    {
+      if(SystemUtils.IS_OS_WINDOWS)
+        true //TODO delete on windows
+      else if(SystemUtils.IS_OS_UNIX)
+        scala.sys.process.Process("rm -rf " + Main.config.sorted + ".gz").!
+
+      context.parent ! CompProcFinished()
+      self ! PoisonPill
+    }
     case _ =>
   }
 

@@ -15,15 +15,13 @@ class WriterActor() extends Actor {
   var counter = 0
   var instCount = 0
   var filename: String = null
-  var actor: String = null
 
 
   override def receive: Receive =
   {
-    case WriterStart(fileName,actor, gzip) =>
+    case WriterStart(fileName, gzip) =>
     {
       this.filename = fileName
-      this.actor = actor
       outputStream = new FileOutputStream(new File(fileName))
       if(gzip)
         outputStream = new GZIPOutputStream(outputStream)
@@ -43,7 +41,7 @@ class WriterActor() extends Actor {
       System.out.println("output file " + filename + " has " + instCount + " instances")
       writer.flush()
       writer.close()
-      context.parent ! WriterClosed(actor, filename)
+      context.parent ! WriterClosed(filename)
     }
     case _ =>
   }

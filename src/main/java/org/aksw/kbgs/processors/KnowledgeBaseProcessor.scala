@@ -24,16 +24,17 @@ class KnowledgeBaseProcessor(kbPrefix: String, propertyMap: collection.mutable.H
   //first pass: evaluate all instances from sorted source file
   override def startProcess(): Unit =
   {
-    tempWriter ! WriterStart(getTempWriterName, kbPrefix)
+    tempWriter ! WriterStart(Main.config.getTempFile(kbPrefix, 1, true))
     val instanceReader = new InstanceReader(List(Main.config.kbMap.get(kbPrefix).get("kbInput")))
     val inits = new InitProcessStruct()
     inits.broadcastId = "compareKb"
-    inits.workerCount = 4
+    inits.workerCount = Main.config.numberOfThreads
     val zz = classOf[KbFilter]
     inits.classTag = ClassTag(zz)
     inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](tempWriter, kbPrefix, idBuffer.getMap(), propertyMap, isUriProvider)
     contractor ! RegisterNewWorkPackage(inits, instanceReader)
     contractor ! InitializeWorker(null)
+    System.out.println("initialize KbFilter workers")
 
   }
 
@@ -50,8 +51,6 @@ class KnowledgeBaseProcessor(kbPrefix: String, propertyMap: collection.mutable.H
 
   override def finish(): Unit =
   {
-    tempWriter ! Finalize
-    context.parent ! ProcessorFinished(kbPrefix)
   }
 
   private def getProperyList()=
@@ -61,20 +60,17 @@ class KnowledgeBaseProcessor(kbPrefix: String, propertyMap: collection.mutable.H
       p._2.get(kbPrefix).map(x => propList += x)
   }
 
-  private def getTempWriterName(): String =
-  {
-    Main.config.tempFile.substring(0,
-      Main.config.tempFile.lastIndexOf('.')) + "_" + kbPrefix +
-      Main.config.tempFile.substring(Main.config.tempFile.lastIndexOf('.')) + ".gz"
-  }
-
   override def receive: Receive =
   {
     case StartProcess() =>
       startProcess()
     case Finished =>
     {
-      finish()
+      tempWriter ! Finalize
+    }
+    case WriterClosed(filename) =>
+    {
+      context.parent ! ProcessorFinished(kbPrefix, 0)
       self ! PoisonPill
     }
     case ContractSigned =>

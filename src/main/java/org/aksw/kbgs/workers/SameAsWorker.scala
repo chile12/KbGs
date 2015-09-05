@@ -21,35 +21,41 @@ class SameAsWorker(writer: ActorRef) extends Actor {
     val firstLine = isb.lines.next()
     val subject = firstLine.substring(0, firstLine.indexOf(">") + 1)
 
-    for (line <- isb.lines)
-    {
-      replaceSubjectUri(line, subject) match {
-        case Some(zw) => sb.append(zw)
+    val repOpt = tempUriMap.get(subject)
+    repOpt match {
+      case Some(replacement) => {
+        for (line <- isb.lines)
+        {
+          if(replacement == null)
+            replacement.replace(" ", "")
+          val replaced = replaceSubjectUri(line, subject, replacement)
+          replaced match {
+            case Some(zw) => sb.append(zw.replace("\n", "") + "\n")
+            case None => //sb.append(line.replace("\n", "") + "\n")
+          }
+        }
+        writer ! InsertJoinedSubject(sb)
       }
+      case None =>
     }
-    writer ! InsertJoinedSubject(sb)
     boss ! GimmeWork()
   }
 
-  private def replaceSubjectUri(line: String, subject: String): Option[String] =
+  private def replaceSubjectUri(line: String, subject: String, replacement: String): Option[String] =
   {
-    var zw = tempUriMap.get(subject)
-    var l = line
-    zw match {
-      case Some(x) => {
-        l = line.replace(subject, zw.get)
-        if(l.contains(newUriStump))
-        {
-          val ind = l.indexOf(newUriStump)
-          val uri = l.substring(ind, l.indexOf('>', ind)+1)
-          zw = tempUriMap.get(uri)
-          if( zw != None)
-            l = line.replace(uri, zw.get)
-        }
-        return Option(l)
-      }
+    var l = line.replace(subject, replacement)
+    if(l.contains(newUriStump))
+    {
+      return None
+/*      val ind = l.indexOf(newUriStump)
+      val uri = l.substring(ind, l.indexOf('>', ind)+1)
+      val zw = tempUriMap.get(uri)
+      zw match {
+        case Some(x) => l = line.replace(uri, x)
+        case None =>
+      }*/
     }
-    None
+    Option(l)
   }
 
   override def receive: Receive =
@@ -67,7 +73,7 @@ class SameAsWorker(writer: ActorRef) extends Actor {
       zw.map(doWork(_))
     }
     case Finalize => {
-      boss ! Finished
+      boss ! Finished(None)
       self ! PoisonPill
     }
     case _ =>

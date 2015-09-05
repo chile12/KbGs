@@ -1,6 +1,6 @@
 package org.aksw.kbgs.processors
 
-import akka.actor.{Actor, ActorRef, PoisonPill, Props}
+import akka.actor.{Actor, PoisonPill, Props}
 import com.google.common.collect.HashMultimap
 import org.aksw.kbgs.Contractor._
 import org.aksw.kbgs.inout.InstanceReader
@@ -14,7 +14,7 @@ import scala.reflect.ClassTag
 /**
  * Created by Chile on 9/3/2015.
  */
-class PropertyFilterProcessor(kbPrefix: String, writer: ActorRef, idBuffer : HashMultimap[String, String], propertyMap: collection.mutable.HashMap[String, String]) extends Actor with InstanceProcessor[StringBuilder, String]{
+class PropertyFilterProcessor(kbPrefix: String, stage: Int, idBuffer : HashMultimap[String, (String, String)], propertyMap: collection.mutable.HashMap[String, String]) extends Actor with InstanceProcessor[StringBuilder, String]{
 
   private var instanceReader: InstanceReader = null
   private val contractor = context.actorOf(Props(classOf[Contractor[StringBuilder]]))
@@ -24,12 +24,13 @@ class PropertyFilterProcessor(kbPrefix: String, writer: ActorRef, idBuffer : Has
     instanceReader = new InstanceReader(List(Main.config.kbMap.get(kbPrefix).get("kbInput")))
     val inits = new InitProcessStruct()
     inits.broadcastId = "filterKb"
-    inits.workerCount = 4
+    inits.workerCount = Main.config.numberOfThreads
     val zz = classOf[KbPathFilter]
     inits.classTag = ClassTag(zz)
-    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](kbPrefix, writer, idBuffer, propertyMap)
+    inits.actorSigObjcts = scala.collection.immutable.Seq[scala.Any](kbPrefix, idBuffer, propertyMap)
     contractor ! RegisterNewWorkPackage(inits, instanceReader)
     contractor ! InitializeWorker(null)
+    System.out.println("initialize KbPathFilter workers")
   }
 
   override def evaluate(input: StringBuilder): Future[String] = Future{
@@ -52,7 +53,7 @@ class PropertyFilterProcessor(kbPrefix: String, writer: ActorRef, idBuffer : Has
 
   override def finish(): Unit =
   {
-    context.parent ! ProcessorFinished(kbPrefix)
+    context.parent ! ProcessorFinished(kbPrefix, stage)
     self ! PoisonPill
   }
 }

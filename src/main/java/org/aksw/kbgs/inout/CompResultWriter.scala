@@ -4,7 +4,7 @@ import java.io._
 
 import akka.actor.{Actor, ActorRef}
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.datatype.guava.GuavaModule
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.google.common.collect.HashBasedTable
 import org.aksw.kbgs.Contractor.{AddCompResult, Finalize, RegistrateNewWriterSource, WriterClosed}
 import org.aksw.kbgs.Main
@@ -35,6 +35,7 @@ class CompResultWriter extends Actor{
             }
           }
         }
+        case Some(x) =>
       }
 
       val v = value.get
@@ -45,9 +46,9 @@ class CompResultWriter extends Actor{
     case Finalize =>
     {
         val mapper = new ObjectMapper()
-        mapper.registerModule(new GuavaModule())
+        mapper.registerModule(new DefaultScalaModule)
         mapper.writeValue(new File(Main.config.propEvalFile), propResultTable)
-        context.parent ! WriterClosed("", Main.config.propEvalFile)
+        context.parent ! WriterClosed(Main.config.propEvalFile)
     }
     case RegistrateNewWriterSource =>
       if(!sourceMap.keySet.contains(sender))

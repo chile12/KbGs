@@ -24,6 +24,7 @@ class Contractor[W] extends Actor{
   private val broadCaster = new util.ArrayList[ActorRef]()
   private val finishedList = new util.ArrayList[Future[Any]]()
   private var finalizedWorkers =0
+  private var router: BroadcastRouter = null
 
   def registerNewProcess(intStruct: InitProcessStruct, wLoader: WorkLoader[W]): Unit =
   {
@@ -31,11 +32,12 @@ class Contractor[W] extends Actor{
     finishedList.clear()
     this.wLoader = wLoader
     this.workerCount = intStruct.workerCount
+    router = new BroadcastRouter(intStruct.workerCount)
     workers =
       if(intStruct.actorSigObjcts != null)
-        context.actorOf(Props(Props.defaultDeploy, intStruct.classTag.runtimeClass, intStruct.actorSigObjcts).withRouter(BroadcastRouter(intStruct.workerCount)))
+        context.actorOf(Props(Props.defaultDeploy, intStruct.classTag.runtimeClass, intStruct.actorSigObjcts).withRouter(router))
       else
-        context.actorOf(Props(intStruct.classTag.runtimeClass).withRouter(BroadcastRouter(intStruct.workerCount)))
+        context.actorOf(Props(intStruct.classTag.runtimeClass).withRouter(router))
     workers ! AssignWorkers(self)
     client ! ContractSigned
   }
@@ -57,7 +59,6 @@ class Contractor[W] extends Actor{
     case InitializeWorker(inits) => {
       if(wLoader != null)
       {
-        System.out.println("initialize workers")
         workers ! Broadcast(InitializeWorker(inits))
         sender ! WorkersInitialized()
       }
@@ -72,14 +73,17 @@ class Contractor[W] extends Actor{
     case Broadcast(any) =>
       if(broadCaster.contains(sender))
         workers ! Broadcast(any)
-    case Finished =>
+    case Finished(any) =>
     {
-      finalizedWorkers = finalizedWorkers+1
-      if(workerCount == finalizedWorkers)
+      if(sender.path.toString.contains(workers.path.toString))
       {
-        client ! Finished
-        context.actorSelection("/user/distributor") ! Finished
-        self ! PoisonPill
+        finalizedWorkers = finalizedWorkers+1
+        context.actorSelection("/user/distributor") !  Finished(any)
+        if(workerCount == finalizedWorkers)
+        {
+          client ! Finished
+          self ! PoisonPill
+        }
       }
     }
     case _ =>
@@ -94,11 +98,12 @@ object Contractor{
   case class Finalize()
   case class InsertJoinedSubject(subj: StringBuilder)
   case class StartProcess()
-  case class WriterClosed(actor: String, fileName: String)
-  case class WriterStart(fileName: String, actor: String, gzip: Boolean = true)
+  case class WriterClosed(fileName: String)
+  case class WriterStart(fileName: String, gzip: Boolean = true)
   case class SameAsFinished()
-  case class ProcessorFinished(kbPrefix: String)
-  case class UriPathsResolved(kbPrefix: String, fileName: String)
+  case class CompProcFinished()
+  case class ProcessorFinished(kbPrefix: String, stage: Int)
+  case class UriPathsResolved(fileName: String)
   case class NewWriter()
   case class NewWriterResponse(writer: ActorRef)
   case class StartSameAsActor(filenames: List[String])

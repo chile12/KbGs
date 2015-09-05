@@ -17,7 +17,7 @@ class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : HashMultimap[Strin
   private val newUriStump = "<http://aksw.org/kbgs/id/%s>"
   private val sameAsMap = HashMultimap.create[String, String]()
   private val tempUriMap = HashMultimap.create[String, String]()
-  private val objectIsUri = HashMultimap.create[String, String]()
+  private val objectIsUri = HashMultimap.create[String, (String, String)]()
   private var boss: ActorRef = null
 
   def doWork(input: StringBuilder): Unit =
@@ -63,11 +63,8 @@ class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : HashMultimap[Strin
   private def hasPredicat(line: String): Boolean =
   {
     val startInd = line.indexOf('>')+1
-    val pred = line.substring(startInd, line.indexOf('>', startInd)+1).trim
-    propertyMap.get(pred) match {
-      case Some(x) => true
-      case None => false
-    }
+    val pred = line.substring(startInd, line.indexOf('>', startInd)).trim.replace("<", "")
+    propertyMap.valuesIterator.contains(pred)
   }
 
   private def getNewLine(line:String, uri:String, id:String): String =
@@ -77,9 +74,11 @@ class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : HashMultimap[Strin
     val triple = zw.substring(0, idx)
     if(!(triple.contains("^^") || triple.contains("\"@") || triple.lastIndexOf('>') < triple.lastIndexOf('"'))) //not!,  object is uri
     {
+
       val startInd = line.indexOf('>')+1
       val pred = line.substring(startInd, line.indexOf('>', startInd)+1).trim
-      objectIsUri.put(triple.substring(triple.lastIndexOf('<'), triple.lastIndexOf('>')+1), pred)
+      val obj = triple.substring(triple.lastIndexOf('<'), triple.lastIndexOf('>')+1).trim
+      objectIsUri.put(obj, (pred, obj))
     }
     triple + "\t<" + graphName + "> .\n"
   }
@@ -100,8 +99,7 @@ class KbFilter(writer: ActorRef, kbPrefix: String, idBuffer : HashMultimap[Strin
       boss = b
     }
     case Finalize => {
-      boss ! Finished
-      context.actorSelection("/user/distributor") ! Finished(Option((kbPrefix, (sameAsMap, tempUriMap, objectIsUri))))
+      boss ! Finished(Option((kbPrefix, (Option(sameAsMap), Option(tempUriMap), Option(objectIsUri)))))
       self ! PoisonPill
     }
     case _ =>
